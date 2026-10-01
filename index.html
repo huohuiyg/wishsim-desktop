@@ -1,0 +1,3607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>祈愿 · Wish Simulator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#070c18; --navy2:#0d1730; --navy3:#152139; --navy4:#1d2b49;
+  --gold:#d3bc8e; --gold-l:#f4e8c6; --gold-d:#7d6839;
+  --r3:#5f86c9; --r3g:#93b9f7;
+  --r4:#9a6dd7; --r4g:#cba4ff;
+  --r5:#d9952f; --r5g:#ffd76a;
+  --txt:#e9e5dc; --txt-dim:#9aa4bb;
+}
+body{
+  background:var(--navy);color:var(--txt);min-height:100vh;overflow-x:hidden;
+  font-family:"HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:radial-gradient(circle at 1px 1px, rgba(190,215,255,.13) 1px, transparent 0);
+  background-size:52px 52px;
+}
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(1100px 620px at 50% -18%, rgba(94,148,235,.20), transparent 70%),
+    radial-gradient(900px 520px at 12% 105%, rgba(211,188,142,.09), transparent 70%);
+}
+/* 右下角留出「祈愿」按钮的落位（404+38+28 ≈ 470px），页脚文字因此改为贴底左对齐；
+   窄屏放不下时改由 @media (max-width:960px) 把页脚整体上抬到按钮带之上 */
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:0 20px 24px;
+  display:flex;flex-direction:column;min-height:100vh}
+.serif{font-family:"Songti SC","Noto Serif SC","Source Han Serif SC",serif}
+
+/* ---------- top bar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:12px;
+  padding:12px 22px;margin:0 -20px 20px;
+  background:linear-gradient(180deg,rgba(7,12,24,.97),rgba(7,12,24,.75) 72%,transparent);
+  backdrop-filter:blur(8px);
+}
+.logo{display:flex;align-items:center;gap:9px;margin-right:auto}
+.logo .mark{width:26px;height:26px;flex:0 0 auto}
+.logo b{font-family:"Songti SC","Noto Serif SC",serif;font-size:19px;letter-spacing:5px;color:var(--gold-l);font-weight:600}
+.logo small{color:var(--txt-dim);font-size:10px;letter-spacing:2.5px;padding-left:9px;border-left:1px solid rgba(211,188,142,.28)}
+/* ---------- top-right nav ---------- */
+.tbtn{
+  display:flex;align-items:center;gap:7px;padding:7px 16px;cursor:pointer;font-family:inherit;
+  border-radius:999px;font-size:13px;letter-spacing:1.5px;color:var(--gold-l);white-space:nowrap;
+  background:linear-gradient(180deg,rgba(29,43,73,.92),rgba(13,23,48,.92));
+  border:1px solid rgba(211,188,142,.32);box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+  transition:border-color .18s, background .18s, transform .18s
+}
+.tbtn:hover{border-color:var(--gold);background:linear-gradient(180deg,rgba(211,188,142,.24),rgba(211,188,142,.08));transform:translateY(-1px)}
+.tbtn:active{transform:translateY(0)}
+.tbtn svg{flex:0 0 auto;display:block}
+
+/* ---------- action bar ---------- */
+.actions{display:flex;gap:14px;margin-top:22px;flex-wrap:wrap;align-items:stretch}
+.wbtn{
+  position:relative;flex:1 1 220px;min-height:58px;cursor:pointer;border:none;font-family:inherit;
+  border-radius:4px;color:#241c08;font-size:16px;letter-spacing:2px;font-weight:600;
+  background:linear-gradient(180deg,#f7edd0,#d8bf8b 55%,#b99c64);
+  box-shadow:0 8px 24px -10px rgba(211,188,142,.9), inset 0 1px 0 #fff8e0;
+  transition:transform .16s, filter .16s;display:flex;align-items:center;justify-content:center;gap:12px
+}
+.wbtn small{font-size:11px;letter-spacing:0;opacity:.75;font-weight:500;display:block;margin-top:1px}
+.wbtn:hover{transform:translateY(-2px);filter:brightness(1.06)}
+.wbtn:active{transform:translateY(0) scale(.985)}
+.wbtn[disabled]{filter:grayscale(.8) brightness(.7);cursor:not-allowed;transform:none}
+.wbtn.sec{
+  flex:0 0 auto;min-height:58px;padding:0 25px;color:var(--gold-l);font-size:13px;letter-spacing:2px;font-weight:400;
+  background:linear-gradient(180deg,rgba(29,43,73,.95),rgba(13,23,48,.95));
+  border:1px solid rgba(211,188,142,.35);box-shadow:none
+}
+.wbtn.sec:hover{border-color:var(--gold)}
+
+/* ---------- 悬浮「祈愿·1」——青绿横幅（按参考图复刻） ---------- */
+/* 定位：视口右下角固定（right/bottom 各 38px 留白）。
+   尺寸 = 基准 --w0/--h0/--f0 × 用户倍率 --sc（「对象管理 → 按钮」里调），断点只覆盖基准值。 */
+#p1.wbg{
+  --w0:404;--h0:96;--f0:52;--sc:1;
+  --w:calc(var(--w0) * var(--sc) * 1px);
+  --h:calc(var(--h0) * var(--sc) * var(--hr,1) * 1px);
+  --fs:calc(var(--f0) * var(--sc) * 1px);
+  --gapR:80px;--gapB:38px;
+  position:fixed;z-index:40;right:var(--gapR);bottom:var(--gapB);
+  width:var(--w);height:var(--h);max-width:calc(100vw - var(--gapR) - 16px);overflow:visible;
+  padding:0;border:0;background:none;cursor:pointer;font-family:inherit;
+  transition:filter .18s,transform .18s;-webkit-tap-highlight-color:transparent
+}
+/* ---------- 边框上的 Q 版小角色 ----------
+   两层结构：.back 用 z-index:-1 垫在横幅之后（身体被挡住），.front 用 z-index:3 盖在横幅之上（手抓边框）。
+   两层的 viewBox / 尺寸 / 位置必须完全一致，靠同一组 CSS 保证像素级对齐。 */
+#p1.wbg .chibi{position:absolute;display:block;pointer-events:none;overflow:hidden;filter:drop-shadow(0 2px 4px rgba(46,96,36,.28))}
+#p1.wbg .chibi.back{z-index:-1}
+#p1.wbg .chibi.front,#p1.wbg .cBL{z-index:3}
+/* 右上：双手趴在横幅上边框，头与手露在框外 */
+#p1.wbg .cTR{
+  width:calc(var(--h) * 0.9773);height:calc(var(--h) * 0.86);
+  right:calc(var(--w) * 0.075);top:calc(var(--h) * -0.706)
+}
+/* 左下：站在横幅左下角前 */
+#p1.wbg .cBL{
+  width:calc(var(--h) * 0.72);height:calc(var(--h) * 0.96);
+  left:calc(var(--w) * 0.030);bottom:calc(var(--h) * -0.19)
+}
+#p1.wbg .gbsvg{
+  position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;
+  animation:gbBreath 4.2s ease-in-out infinite
+}
+/* 文字两层（自下而上）：浅绿描边 → 白色渐变字面；外发光用容器 drop-shadow
+   不用负 z-index：它会盖住 background-clip 的字面，只剩描边 */
+#p1.wbg .gbl{
+  position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;
+  font-size:var(--fs);line-height:1;font-weight:900;letter-spacing:.02em;white-space:nowrap;
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  filter:drop-shadow(0 2px 2px rgba(40,96,26,.32)) drop-shadow(0 0 4px rgba(255,255,255,.55))
+}
+#p1.wbg .gbl>*,#p1.wbg .gbl::after{grid-area:1/1}
+#p1.wbg .gbl::after{content:attr(data-t)}
+#p1.wbg .gbt{-webkit-text-stroke:5px #5aa74d;color:transparent}   /* ① 底：绿色描边 */
+#p1.wbg .gbl::after{                                                /* ② 面：白色字面 */
+  background:linear-gradient(180deg,#ffffff 0%,#ffffff 64%,#f7ffe8 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent
+}
+#p1.wbg:hover{filter:brightness(1.03) saturate(1.04);transform:translateY(-2px)}
+#p1.wbg:active{transform:translateY(0) scale(.985)}
+#p1.wbg.cold{filter:grayscale(.6) brightness(.84)}
+#p1.wbg.cold .gbsvg{animation:none}
+#p1.wbg.cold:hover{filter:grayscale(.25) brightness(.96)}
+@keyframes gbBreath{
+  0%,100%{filter:drop-shadow(0 8px 18px rgba(58,116,48,.26)) drop-shadow(0 0 11px rgba(206,244,150,.55))}
+  50%{filter:drop-shadow(0 8px 18px rgba(58,116,48,.26)) drop-shadow(0 0 26px rgba(206,244,150,.95))}
+}
+@media (max-width:1200px){ #p1.wbg{--w0:346;--h0:82;--f0:44} }
+@media (max-width:660px){
+  #p1.wbg{--w0:292;--h0:69;--f0:37;--gapR:36px;--gapB:24px}
+}
+
+/* ---------- 自定义按钮皮肤（相册 / 相机图片替代横幅外观） ----------
+   启用皮肤时隐藏横幅本体 .gbsvg，让用户的图片直接充当按钮。
+   文字(.gbl) 与小角色(.chibi) 默认「不再叠加」（图片优先）：用户传进来的
+   常常就是一张自带文字的整张按钮图，叠上我们的文字会重影；
+   需要时可在面板里重新勾上「叠加按钮文字 / 叠加小角色」。 */
+#p1.wbg .skinimg{
+  position:absolute;inset:0;width:100%;height:100%;display:block;
+  object-fit:cover;object-position:center;pointer-events:none;
+  border-radius:var(--skr,0px);opacity:0;transition:opacity .28s ease
+}
+#p1.wbg .skinimg.fitcontain{object-fit:contain}
+#p1.wbg .skinscrim{
+  position:absolute;inset:0;pointer-events:none;border-radius:var(--skr,0px);
+  background:#05080f;opacity:0;transition:opacity .28s ease
+}
+#p1.wbg.skinned .skinimg{opacity:1}
+#p1.wbg.skinned .skinscrim{opacity:var(--sko,0)}
+#p1.wbg.skinned .gbsvg{display:none}
+#p1.wbg.skinned.notext .gbl{display:none}
+#p1.wbg.skinned.nochibi .chibi{display:none}
+/* 换成任意照片后，为薄荷底设计的「白字 + 绿描边」会读不出来：
+   统一换成半透明深色描边 + 更强投影，保证在明暗照片上都立得住。 */
+#p1.wbg.skinned .gbt{-webkit-text-stroke:5px rgba(18,40,14,.66)}
+#p1.wbg.skinned .gbl{
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,.72)) drop-shadow(0 0 3px rgba(0,0,0,.55))
+}
+
+/* ---------- 空卡池提示 ---------- */
+.empty-hint{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;
+  text-align:center;color:var(--txt-dim);font-size:13px;letter-spacing:1.5px
+}
+.empty-hint .eh{font-family:"Songti SC","Noto Serif SC",serif;font-size:18px;letter-spacing:7px;color:rgba(244,232,198,.75)}
+.empty-hint .mini{pointer-events:auto}
+
+.foot{margin-top:auto;padding-top:26px;font-size:11px;color:#66718a;line-height:1.9;text-align:left;letter-spacing:.4px;text-shadow:0 1px 8px rgba(0,0,0,.85);
+  align-self:flex-start;max-width:calc(100% - var(--wishReserve, 470px))}
+/* 窄屏 / 按钮调大后放不下 → 由 syncWishLayout() 给 body 加 .wishlift，把页脚整体抬到按钮带之上 */
+body.wishlift .wrap{padding-bottom:var(--wishLift, 152px)}
+body.wishlift .foot{align-self:stretch;max-width:100%;text-align:center}
+
+/* ---------- wish animation ---------- */
+#fxLayer{position:fixed;inset:0;z-index:9000;display:none}
+#fxLayer.on{display:block}
+#fxCanvas{position:absolute;inset:0;width:100%;height:100%}
+#fxLayer .vig{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle at 50% 50%, transparent 28%, rgba(0,0,0,.72) 100%)}
+#fxLayer .skipbtn{
+  position:absolute;right:26px;bottom:26px;z-index:5;cursor:pointer;font-size:12px;letter-spacing:3px;
+  color:rgba(233,229,220,.55);padding:9px 18px;border:1px solid rgba(233,229,220,.25);border-radius:999px;
+  background:rgba(0,0,0,.35);transition:.2s;user-select:none
+}
+#fxLayer .skipbtn:hover{color:var(--gold-l);border-color:var(--gold)}
+#fxLayer .hitmsg{
+  position:absolute;left:0;right:0;top:15%;text-align:center;z-index:4;pointer-events:none;
+  font-family:"Songti SC","Noto Serif SC",serif;font-size:17px;letter-spacing:12px;text-indent:12px;
+  opacity:0;transition:opacity .55s, transform .55s;transform:translateY(10px);
+  color:#fff;text-shadow:0 0 30px currentColor
+}
+#fxLayer .hitmsg.show{opacity:1;transform:none}
+
+/* ---------- reveal（可爱风：奶油马卡龙 · 圆润贴纸） ---------- */
+#rvLayer{
+  /* 稀有度在浅底上要「浅卡面 + 深描边」才有对比；只在本层覆盖，不动全局 --r3/4/5 */
+  --r3:#a9d7f6; --r3g:#4a9bd8;
+  --r4:#d7bdfa; --r4g:#8f5fd0;
+  --r5:#ffd98a; --r5g:#e08a1e;
+  position:fixed;inset:0;z-index:10000;display:none;flex-direction:column;align-items:center;justify-content:center;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255,255,255,.94) 0%, rgba(255,255,255,.62) 42%, rgba(255,255,255,.32) 100%),
+    linear-gradient(168deg,#fdf4ff 0%,#e6f5ff 46%,#e3fbec 100%);
+  backdrop-filter:blur(12px) saturate(1.06);-webkit-backdrop-filter:blur(12px) saturate(1.06);padding:22px
+}
+#rvLayer.on{display:flex}
+#rvStage{position:relative;display:grid;place-items:center;flex:0 0 auto}
+
+/* 背后飘浮的小星星 / 糖豆光点 */
+.rvdeco{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.rvdeco i{
+  position:absolute;display:block;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%, #fff 0%, var(--dc) 34%, var(--dc) 68%, rgba(255,255,255,0) 100%);
+  /* 静态 opacity 兜底：display:none → .on 时动画会从 delay 重新计时，
+     这段空窗期若用 0 就是「刚打开时背景一片空白」 */
+  opacity:.42;animation:floaty var(--dur,9s) ease-in-out infinite
+}
+.rvdeco i.st{
+  border-radius:0;background:var(--dc);
+  clip-path:polygon(50% 0%,61% 39%,100% 50%,61% 61%,50% 100%,39% 61%,0% 50%,39% 39%)
+}
+@keyframes floaty{
+  0%{opacity:0;transform:translateY(16px) scale(.82) rotate(0deg)}
+  18%{opacity:1}
+  68%{opacity:.86}
+  100%{opacity:0;transform:translateY(-48px) scale(1.1) rotate(34deg)}
+}
+
+/* 柔和光芒：保留放射结构，降低透明度 + 轻微模糊，去掉硬边 */
+.rays{
+  position:absolute;width:680px;height:680px;left:50%;top:44%;translate:-50% -50%;z-index:0;pointer-events:none;
+  background:repeating-conic-gradient(from 0deg,
+    rgba(0,0,0,0) 0deg 7deg, var(--rg) 7deg 10.5deg, rgba(0,0,0,0) 10.5deg 27deg);
+  mask-image:radial-gradient(circle, #000 5%, rgba(0,0,0,.4) 32%, transparent 64%);
+  -webkit-mask-image:radial-gradient(circle, #000 5%, rgba(0,0,0,.4) 32%, transparent 64%);
+  filter:blur(1.4px);
+  animation:spin 22s linear infinite;opacity:0;transition:opacity .7s
+}
+.rays.on{opacity:.44}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.card{
+  position:relative;width:256px;height:398px;border-radius:26px;overflow:hidden;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  background:#fff;border:3px solid #fff;
+  box-shadow:0 20px 44px -18px rgba(96,128,104,.55), 0 0 0 2px var(--rc), 0 0 62px -14px var(--rg);
+  animation:cardIn .5s cubic-bezier(.2,.9,.3,1.4) both;
+  --rc:var(--r3);--rg:var(--r3g)
+}
+@keyframes cardIn{0%{opacity:0;transform:scale(.68) translateY(24px) rotate(-5deg)}100%{opacity:1;transform:none}}
+.card.r3{--rc:var(--r3);--rg:var(--r3g)}
+.card.r4{--rc:var(--r4);--rg:var(--r4g)}
+.card.r5{--rc:var(--r5);--rg:var(--r5g)}
+.card .bg{position:absolute;inset:0;z-index:0;
+  background:linear-gradient(168deg,#ffffff 0%,var(--rc) 34%,var(--rg) 72%,var(--rg) 100%)}
+.card .bg::after{content:'';position:absolute;inset:0;background:
+  radial-gradient(circle at 50% 22%, rgba(255,255,255,.95), transparent 56%),
+  radial-gradient(circle at 14% 86%, rgba(255,255,255,.55), transparent 44%)}
+.card .artw{position:absolute;inset:0;bottom:96px;z-index:2;display:grid;place-items:center}
+.card .artw>*{grid-area:1/1}   /* 描边层与字面层重叠，靠 z-index 分先后 */
+.card .mono-out{               /* 底：只画描边环，填充透明 */
+  writing-mode:vertical-rl;text-orientation:upright;
+  font-family:"YouYuan","幼圆","Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  font-weight:700;letter-spacing:9px;line-height:1;max-height:calc(100% - 12px);
+  color:transparent;-webkit-text-stroke:16px var(--rg);
+  filter:drop-shadow(0 6px 12px rgba(96,110,96,.3));
+  /* 与字面层同步淡入，否则橙色描边会在剪影还没淡出时先冒出来 */
+  animation:monoIn .52s .30s ease both
+}
+.card .mono{                   /* 面：白色字面，盖住描边环的内侧 */
+  writing-mode:vertical-rl;text-orientation:upright;
+  font-family:"YouYuan","幼圆","Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  font-weight:700;letter-spacing:9px;line-height:1;max-height:calc(100% - 12px);
+  color:#fff
+}
+.card .info{
+  position:relative;z-index:3;padding:13px 14px 15px;text-align:center;
+  background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.82) 30%, rgba(255,255,255,.95));
+  border-top:2px dashed rgba(148,172,152,.42)
+}
+.card .nm{font-family:"YouYuan","幼圆","Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;font-weight:700;font-size:19px;letter-spacing:2px;color:#4c5c4e;text-shadow:0 1px 0 #fff}
+.card .st{font-size:17px;letter-spacing:3px;margin-top:4px;line-height:1;color:var(--rg);
+  text-shadow:0 1px 0 #fff, 0 0 12px rgba(255,255,255,.9)}
+.card .mt{font-size:11.5px;letter-spacing:2px;margin-top:7px;color:#8a9a8e}
+.card .badge{
+  position:absolute;top:11px;left:11px;z-index:5;font-size:10px;letter-spacing:2px;padding:4px 11px;border-radius:999px;
+  background:linear-gradient(180deg,#ffe89a,#ffb347);color:#7a4a06;font-weight:700;
+  box-shadow:0 3px 9px -3px rgba(190,130,30,.6), inset 0 0 0 2px rgba(255,255,255,.9)
+}
+.card .badge.dup{background:linear-gradient(180deg,#eaf1f7,#c6d3de);color:#4c5c68;box-shadow:inset 0 0 0 2px rgba(255,255,255,.9)}
+.card::before{content:'';position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:23px;
+  border:2px solid rgba(255,255,255,.8);opacity:1;
+  box-shadow:inset 0 0 32px -6px rgba(255,255,255,.95)}
+.card.r5{box-shadow:0 22px 52px -18px rgba(176,120,40,.5), 0 0 0 2px var(--rc), 0 0 78px -10px var(--rg)}
+
+#rvGrid{display:none;grid-template-columns:repeat(5,86px);gap:10px;margin-top:6px}
+#rvGrid.on{display:grid}
+.gc{
+  position:relative;height:124px;border-radius:16px;overflow:hidden;border:2px solid #fff;
+  display:flex;flex-direction:column;justify-content:flex-end;padding:6px 5px;gap:2px;
+  box-shadow:0 10px 20px -12px rgba(96,128,104,.6);
+  animation:gin .34s cubic-bezier(.2,.9,.3,1.4) both
+}
+@keyframes gin{0%{opacity:0;transform:translateY(12px) scale(.9)}100%{opacity:1;transform:none}}
+.gc{--rc:var(--r3);--rg:var(--r3g)}
+.gc .gbg{position:absolute;inset:0;background:linear-gradient(168deg,#fff 0%,var(--rc) 62%,var(--rg) 100%)}
+.gc .gmono{
+  position:absolute;top:15px;left:0;right:0;text-align:center;z-index:1;
+  font-family:"YouYuan","幼圆","Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;font-weight:700;font-size:38px;line-height:1;color:#fff;
+  font-family:"YouYuan","幼圆","Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  font-weight:700;font-size:38px;line-height:1;color:#fff;
+  /* 小字号不能用居中描边：38px 的笔画只有 3~4px，6px 描边会把字形糊成一块色块，
+     改用多层 text-shadow 做外描边，字面保持完整 */
+  text-shadow:
+    0 0 1px var(--rg),
+    1.7px 0 var(--rg), -1.7px 0 var(--rg), 0 1.7px var(--rg), 0 -1.7px var(--rg),
+    1.2px 1.2px var(--rg), -1.2px 1.2px var(--rg), 1.2px -1.2px var(--rg), -1.2px -1.2px var(--rg),
+    0 3px 6px rgba(96,110,96,.35)
+}
+.gc .gn{position:relative;z-index:2;font-size:10.5px;font-weight:600;text-align:center;color:#4c5c4e;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 0 rgba(255,255,255,.9)}
+.gc .gs{position:relative;z-index:2;font-size:9px;font-weight:700;text-align:center;color:var(--rg);letter-spacing:1px}
+.gc .gk{position:absolute;top:4px;right:4px;z-index:3;font-size:8.5px;font-weight:700;color:#7a4a06;
+  background:rgba(255,233,155,.95);padding:1px 5px;border-radius:999px}
+#rvFooter{display:flex;gap:12px;margin-top:26px;flex-wrap:wrap;justify-content:center;min-height:52px}
+#rvFooter.hide{visibility:hidden}
+#rvTitle{
+  font-family:"YouYuan","幼圆","Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;font-weight:700;font-size:15px;letter-spacing:10px;text-indent:10px;
+  color:#fff;-webkit-text-stroke:6px #7cc26a;paint-order:stroke fill;
+  filter:drop-shadow(0 3px 8px rgba(96,160,86,.4));margin-bottom:20px
+}
+/* 可爱风胶囊按钮：只作用于揭示层，主界面按钮样式不动 */
+#rvFooter .wbtn.sec{
+  min-height:48px;padding:0 28px;border-radius:999px;font-size:14px;font-weight:700;letter-spacing:2px;
+  color:#2f6b3a;border:2px solid #fff;
+  background:linear-gradient(180deg,#f9fded,#b7e08a);
+  box-shadow:0 10px 22px -10px rgba(92,160,80,.75), inset 0 1px 0 #fff
+}
+#rvFooter .wbtn.sec:hover{border-color:#fff;filter:brightness(1.05)}
+#rvLayer .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:99}
+
+/* ---------- 自定义壁纸层 ---------- */
+#wallLayer{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:#070c18}
+#wallLayer>*{position:absolute;inset:0;width:100%;height:100%}
+#wallLayer .wi,#wallLayer .wv{object-fit:cover;object-position:center;display:block}
+#wallLayer .wv{opacity:0}
+#wallLayer.video .wi{opacity:0}
+#wallLayer.video .wv{opacity:1}
+#wallLayer.contain .wi,#wallLayer.contain .wv{object-fit:contain}
+#wallLayer .wveil{background:rgba(4,8,18,0);transition:background .25s}
+#wallLayer .wvig{background:radial-gradient(120% 90% at 50% 40%, transparent 30%, rgba(0,0,0,.55) 100%);opacity:0;transition:opacity .25s}
+#wallLayer.vig .wvig{opacity:1}
+@keyframes kbzoom{0%{transform:scale(1.05) translate3d(0,0,0)}100%{transform:scale(1.18) translate3d(-1.6%,-1.2%,0)}}
+#wallLayer.kb .wi,#wallLayer.kb .wv{animation:kbzoom 30s ease-in-out infinite alternate}
+body.has-wall{background:#05080f}
+body.has-wall::before,body.has-wall::after{opacity:0}
+
+/* ---------- 壁纸 / 相机面板 ---------- */
+.wallgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
+.wallcard{border:1px solid rgba(211,188,142,.24);border-radius:6px;padding:15px 12px;cursor:pointer;text-align:center;
+  background:linear-gradient(180deg,rgba(21,32,57,.85),rgba(11,18,38,.85));transition:.2s}
+.wallcard:hover{border-color:var(--gold);background:linear-gradient(180deg,rgba(34,48,80,.9),rgba(15,24,48,.9));transform:translateY(-2px)}
+.wallcard .gi{font-size:24px;line-height:1;margin-bottom:8px;filter:drop-shadow(0 0 10px rgba(211,188,142,.5))}
+.wallcard b{display:block;font-size:13px;color:var(--gold-l);letter-spacing:1px;font-weight:600}
+.wallcard span{display:block;font-size:11px;color:var(--txt-dim);margin-top:5px;line-height:1.65}
+.wprev{margin-top:14px;border:1px solid rgba(211,188,142,.22);border-radius:6px;overflow:hidden;background:#060a14;
+  position:relative;aspect-ratio:16/9}
+.wprev>*{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.wprev .ph{display:grid;place-items:center;color:#556085;font-size:12px;letter-spacing:2px}
+.camwrap{position:relative;border-radius:6px;overflow:hidden;background:#000;aspect-ratio:16/9;border:1px solid rgba(211,188,142,.3)}
+.camwrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(var(--mir,1))}
+.camwrap .cmsg{position:absolute;inset:0;display:grid;place-items:center;color:#8b96b4;font-size:12.5px;letter-spacing:1.5px;
+  text-align:center;line-height:1.9;padding:20px;background:#05080f}
+.camrow{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.slider{display:grid;grid-template-columns:112px 1fr 62px;gap:11px;align-items:center;margin-top:10px}
+.slider>span{font-size:12px;color:var(--txt-dim);letter-spacing:.5px}
+.slider>em{font-size:12px;color:var(--gold-l);font-style:normal;text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:3px;background:rgba(211,188,142,.25);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+  background:linear-gradient(180deg,var(--gold-l),var(--gold));cursor:pointer;box-shadow:0 0 9px rgba(211,188,142,.7)}
+
+/* ---------- 揭示：碎片 / 剪影（可爱风：圆头彩屑 + 贴纸字） ---------- */
+.card .shards{position:absolute;left:50%;top:42%;width:0;height:0;z-index:1;pointer-events:none}
+.card .shards i{position:absolute;left:0;bottom:0;width:0;height:0;transform-origin:50% 100%}
+.card .shards i b{position:absolute;left:50%;bottom:0;translate:-50% 0;display:block;border-radius:99px;opacity:0;
+  transform-origin:50% 100%;
+  animation:shardIn .62s cubic-bezier(.18,.82,.3,1) both}
+@keyframes shardIn{0%{opacity:0;transform:scaleY(.18)}30%{opacity:1}100%{opacity:.34;transform:scaleY(1.32)}}
+.card .artw::before{content:'';position:absolute;left:50%;top:50%;translate:-50% -50%;z-index:-1;
+  width:152%;height:120%;border-radius:50%;
+  background:radial-gradient(closest-side, rgba(255,255,255,.4), rgba(255,255,255,.16) 55%, rgba(255,255,255,0) 80%)}
+.card .silh{position:absolute;left:0;right:0;top:0;bottom:96px;z-index:3;display:grid;place-items:center;
+  font-family:"YouYuan","幼圆","Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  font-weight:700;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:9px;line-height:1;max-height:calc(100% - 12px);
+  color:#fff;-webkit-text-stroke:10px rgba(150,168,154,.62);paint-order:stroke fill;
+  animation:silhOut .52s .30s cubic-bezier(.4,0,.6,1) both}
+@keyframes silhOut{from{opacity:1}to{opacity:0}}
+.card .mono{animation:monoIn .52s .30s ease both}
+@keyframes monoIn{from{opacity:0}to{opacity:1}}
+.card.burst{animation:cardBurst .66s cubic-bezier(.14,.86,.3,1) both}
+@keyframes cardBurst{0%{opacity:0;transform:scale(.64) rotate(-4deg);filter:brightness(1.9) saturate(.72)}
+  58%{opacity:1;transform:scale(1.06) rotate(1.4deg);filter:brightness(1.14)}
+  100%{opacity:1;transform:none;filter:none}}
+
+/* ---------- modal ---------- */
+.mask{position:fixed;inset:0;z-index:12000;background:rgba(3,6,13,.82);backdrop-filter:blur(5px);display:none}
+.mask.on{display:block}
+.modal{
+  position:absolute;left:50%;top:50%;translate:-50% -50%;width:min(880px,95vw);max-height:87vh;display:flex;flex-direction:column;
+  background:linear-gradient(180deg,#152039,#0b1226);border:1px solid rgba(211,188,142,.4);border-radius:6px;
+  box-shadow:0 40px 90px -30px #000;overflow:hidden
+}
+.mhd{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid rgba(211,188,142,.2);flex:0 0 auto}
+.mhd h3{font-family:"Songti SC","Noto Serif SC",serif;font-size:16px;letter-spacing:5px;color:var(--gold-l);font-weight:500}
+.mclose{cursor:pointer;color:var(--txt-dim);font-size:20px;line-height:1;padding:0 4px}
+.mclose:hover{color:var(--gold)}
+.mtabs{display:flex;gap:2px;padding:0 14px;border-bottom:1px solid rgba(211,188,142,.16);flex:0 0 auto}
+.mtabs div{padding:10px 17px;font-size:13px;color:var(--txt-dim);cursor:pointer;border-bottom:2px solid transparent;letter-spacing:1px}
+.mtabs div.on{color:var(--gold-l);border-bottom-color:var(--gold)}
+.mbd{padding:16px 20px 22px;overflow:auto;flex:1 1 auto}
+.mbd::-webkit-scrollbar{width:7px}
+.mbd::-webkit-scrollbar-thumb{background:rgba(211,188,142,.35);border-radius:9px}
+.tline{font-size:10.5px;color:var(--txt-dim);letter-spacing:1.5px;margin:20px 0 10px;display:flex;align-items:center;gap:10px}
+.tline:first-child{margin-top:0}
+.tline::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(211,188,142,.35),transparent)}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(122px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:rgba(211,188,142,.07);border:1px solid rgba(211,188,142,.22);border-radius:4px;padding:11px 13px}
+.stat span{display:block;font-size:11px;color:var(--txt-dim);letter-spacing:1px}
+.stat b{font-size:20px;color:var(--gold-l);font-variant-numeric:tabular-nums}
+.hrow{display:grid;grid-template-columns:56px 1fr 66px 80px;gap:8px;align-items:center;padding:8px 6px;font-size:12.5px;
+  border-bottom:1px solid rgba(255,255,255,.07)}
+.hrow.head{color:var(--txt-dim);font-size:11px;letter-spacing:1px}
+.hrow.r5{background:linear-gradient(90deg,rgba(217,149,47,.18),transparent)}
+.hrow.r4{background:linear-gradient(90deg,rgba(154,109,215,.13),transparent)}
+.hrow .tm{color:var(--txt-dim);font-size:11px;font-variant-numeric:tabular-nums}
+.hrow .pt{color:var(--gold);font-variant-numeric:tabular-nums;font-size:11.5px}
+.rk{font-weight:700;letter-spacing:0}
+.rk.r5{color:var(--r5)}.rk.r4{color:var(--r4)}.rk.r3{color:var(--r3)}
+.empty{text-align:center;color:var(--txt-dim);font-size:13px;padding:40px 0;letter-spacing:1px}
+
+/* ---------- form ---------- */
+.field{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+input[type=text],select,textarea{
+  font-family:inherit;font-size:13px;color:var(--txt);background:rgba(4,8,18,.75);
+  border:1px solid rgba(211,188,142,.28);border-radius:3px;padding:9px 11px;outline:none;transition:.18s
+}
+input[type=text]:focus,select:focus,textarea:focus{border-color:var(--gold);box-shadow:0 0 0 2px rgba(211,188,142,.12)}
+input[type=text]{flex:1 1 150px;min-width:0}
+select{cursor:pointer}
+textarea{width:100%;min-height:180px;line-height:1.85;resize:vertical;font-size:12.5px}
+.mini{cursor:pointer;font-family:inherit;font-size:12px;letter-spacing:1px;padding:9px 17px;border-radius:3px;color:#241c08;
+  background:linear-gradient(180deg,#f7edd0,#d8bf8b);border:none;font-weight:600;white-space:nowrap}
+.mini:hover{filter:brightness(1.07)}
+.mini.ghost{background:transparent;border:1px solid rgba(211,188,142,.45);color:var(--gold-l);font-weight:400}
+.mini.ghost:hover{border-color:var(--gold);color:#fff}
+.mini.danger{border-color:rgba(220,120,120,.5);color:#e89a9a}
+.mini.danger:hover{border-color:#e88;color:#fff}
+.hint{font-size:11.5px;color:var(--txt-dim);line-height:1.9;background:rgba(211,188,142,.06);
+  border-left:2px solid rgba(211,188,142,.4);padding:10px 13px;border-radius:0 3px 3px 0;margin-bottom:12px}
+.hint code{background:rgba(0,0,0,.4);padding:1px 5px;border-radius:2px;color:var(--gold-l);font-size:11.5px}
+
+/* item list */
+.ilist{border:1px solid rgba(211,188,142,.18);border-radius:4px;overflow:hidden}
+.ihead,.irow{display:grid;grid-template-columns:78px 1fr 1fr 62px 36px;gap:8px;align-items:center;padding:8px 12px}
+.ihead{font-size:11px;color:var(--txt-dim);letter-spacing:1px;background:rgba(211,188,142,.07);
+  border-bottom:1px solid rgba(211,188,142,.18)}
+.irow{border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}
+.irow:last-child{border-bottom:none}
+.irow:hover{background:rgba(255,255,255,.025)}
+.irow select{padding:4px 6px;font-size:12px}
+.iname,.itag{padding:3px 6px;border-radius:3px;border:1px dashed transparent;outline:none;min-height:24px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text}
+.iname:hover,.itag:hover{border-color:rgba(211,188,142,.3)}
+.iname:focus,.itag:focus{border-color:var(--gold);background:rgba(0,0,0,.4);white-space:normal;overflow:visible}
+.itag{color:var(--txt-dim);font-size:12px}
+.iup{cursor:pointer;font-size:11px;letter-spacing:1px;text-align:center;padding:4px 0;border-radius:3px;
+  border:1px solid rgba(211,188,142,.3);color:var(--txt-dim);transition:.18s;user-select:none}
+.iup.on{background:linear-gradient(180deg,#ffd76a,#d9952f);color:#2a1c04;border-color:#ffd76a;font-weight:700}
+.idel{cursor:pointer;color:#7c869e;text-align:center;font-size:15px;user-select:none}
+.idel:hover{color:#e88}
+.bulkrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.chk{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--txt-dim);cursor:pointer;user-select:none}
+.chk input{accent-color:#d3bc8e;cursor:pointer}
+
+/* ---------- 概率设置 ---------- */
+.rgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:11px}
+.rgrid label{display:flex;align-items:center;justify-content:space-between;gap:9px;font-size:12.5px;color:#cbd5ea;
+  background:rgba(255,255,255,.03);border:1px solid rgba(211,188,142,.18);border-radius:4px;padding:8px 11px}
+.rgrid label input{width:76px;text-align:right;padding:5px 8px;font-variant-numeric:tabular-nums;font-size:12.5px;flex:0 0 auto}
+.rgrid label em{font-style:normal;color:var(--txt-dim);font-size:11px}
+.simbox{margin-top:13px;padding:12px 14px;border-radius:4px;font-size:12.5px;line-height:2;
+  background:linear-gradient(180deg,rgba(94,148,235,.10),rgba(94,148,235,.03));
+  border:1px solid rgba(94,148,235,.3);color:#cbd5ea}
+.simbox b{color:var(--gold-l);font-variant-numeric:tabular-nums;font-size:14px}
+.simbox i{font-style:normal;color:#8fa2c4;font-size:11px}
+.wgroup{margin-bottom:14px}
+.whead{display:flex;align-items:center;gap:9px;font-size:12px;letter-spacing:2px;margin-bottom:7px;color:var(--txt-dim)}
+.whead b{font-weight:400}
+.whead .rk{letter-spacing:0}
+.whead .wbtn2{margin-left:auto;cursor:pointer;font-size:11px;padding:3px 10px;border-radius:3px;
+  border:1px solid rgba(211,188,142,.35);color:var(--gold);background:transparent;font-family:inherit}
+.whead .wbtn2:hover{background:rgba(211,188,142,.14)}
+.wrow{display:grid;grid-template-columns:minmax(90px,.85fr) minmax(140px,1.5fr) 78px 112px;gap:10px;align-items:center;padding:6px 4px;
+  border-bottom:1px solid rgba(255,255,255,.06)}
+.wrow:last-child{border-bottom:none}
+.wrow .wn{font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wrow input[type=range]{width:100%;accent-color:#d3bc8e;cursor:pointer;height:18px}
+.wrow input[type=number]{width:100%;text-align:right;padding:4px 7px;font-size:12px;font-variant-numeric:tabular-nums}
+.wrow .wp{font-size:12px;color:var(--gold-l);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.wrow .wp i{display:block;font-style:normal;font-size:10.5px;color:#7f8ba5}
+@media (max-width:880px){
+  .wrow{grid-template-columns:1fr 90px 58px;row-gap:2px}
+  .wrow .wp{grid-column:1 / -1;text-align:left}
+}
+
+.toast{
+  position:fixed;left:50%;bottom:42px;translate:-50% 0;z-index:15000;padding:11px 24px;border-radius:999px;
+  background:rgba(6,11,22,.95);border:1px solid rgba(211,188,142,.45);color:var(--gold-l);font-size:13px;letter-spacing:1px;
+  opacity:0;transition:.3s;pointer-events:none;box-shadow:0 12px 34px -12px #000
+}
+.toast.on{opacity:1;bottom:56px}
+
+@media (max-width:880px){
+  #rvGrid{grid-template-columns:repeat(5,62px);gap:7px}
+  .gc{height:98px}
+  .gc .gmono{font-size:28px}
+  .card{width:216px;height:338px}
+  .card .artw{bottom:88px}
+  .topbar{padding:10px 14px;gap:8px;flex-wrap:wrap}
+  .logo b{font-size:16px;letter-spacing:3px}
+  .logo small{display:none}
+  .tbtn{font-size:12px;padding:6px 12px;letter-spacing:1px;gap:5px}
+  .ihead,.irow{grid-template-columns:64px 1fr 66px 52px 28px;padding:7px 9px;gap:6px}
+  .ihead span:nth-child(3){display:none}
+  .irow .itag{display:none}
+}
+</style>
+</head>
+<body>
+<div id="wallLayer" aria-hidden="true">
+  <img class="wi" id="wallImg" alt="">
+  <video class="wv" id="wallVid" autoplay loop muted playsinline></video>
+  <div class="wveil" id="wallVeil"></div>
+  <div class="wvig"></div>
+</div>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="logo">
+      <svg class="mark" viewBox="0 0 32 32" fill="none">
+        <path d="M16 2l3.4 9.1L29 14.5l-9.6 3.4L16 27l-3.4-9.1L3 14.5l9.6-3.4z" fill="url(#lg1)"/>
+        <defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#f4e8c6"/><stop offset="1" stop-color="#b99c64"/></linearGradient></defs>
+      </svg>
+      <b>祈愿</b><small>WISH SIMULATOR</small>
+    </div>
+    <button class="tbtn" id="mgrTop" title="管理抽卡对象、概率与卡池">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+        <path d="M4 6.5h16M4 12h16M4 17.5h10" stroke="#d3bc8e" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>对象管理
+    </button>
+    <button class="tbtn" id="histTop" title="查看祈愿记录">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="8.6" stroke="#d3bc8e" stroke-width="1.6"/>
+        <path d="M12 6.8V12l3.6 2.2" stroke="#d3bc8e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>记录
+    </button>
+    <button class="tbtn" id="bgBtn" title="自定义背景壁纸">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+        <rect x="2.5" y="4.5" width="19" height="15" rx="2" stroke="#d3bc8e" stroke-width="1.5"/>
+        <circle cx="8.4" cy="9.6" r="1.8" fill="#d3bc8e"/>
+        <path d="M3 17.2l5.2-4.6 3.6 3.1 3.9-3.6L21 16.6" stroke="#d3bc8e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>背景
+    </button>
+  </div>
+
+  <div class="empty-hint" id="emptyHint" style="display:none">
+    <div class="eh">卡 池 尚 未 填 充</div>
+    <div>抽卡对象完全由你手动添加，仅以文字呈现</div>
+    <button class="mini" id="hintAdd">前往对象管理</button>
+  </div>
+
+  <button class="wbg" id="p1" title="祈愿·1">
+    <!-- ===== 右上角：从横幅后探身、双手扒住上边框 —— 后层（下半身被横幅挡住） ===== -->
+    <svg class="chibi cTR back" viewBox="0 0 100 88" aria-hidden="true">
+      <defs>
+        <linearGradient id="nxHair" x1="26%" y1="0%" x2="74%" y2="100%">
+          <stop offset="0%" stop-color="#ffffff"/>
+          <stop offset="38%" stop-color="#f5fbe9"/>
+          <stop offset="74%" stop-color="#dcf0c4"/>
+          <stop offset="100%" stop-color="#bbe29e"/>
+        </linearGradient>
+        <linearGradient id="nxSkin" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ffefe4"/>
+          <stop offset="100%" stop-color="#f8ddc9"/>
+        </linearGradient>
+        <linearGradient id="nxDress" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ffffff"/>
+          <stop offset="100%" stop-color="#eff8e4"/>
+        </linearGradient>
+        <linearGradient id="nxCape" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#43813f"/>
+          <stop offset="100%" stop-color="#1d3d24"/>
+        </linearGradient>
+        <linearGradient id="nxLeaf" x1="16%" y1="0%" x2="78%" y2="100%">
+          <stop offset="0%" stop-color="#e6f8c6"/>
+          <stop offset="100%" stop-color="#93d167"/>
+        </linearGradient>
+        <radialGradient id="nxEye" cx="42%" cy="30%" r="76%">
+          <stop offset="0%" stop-color="#d3f6b0"/>
+          <stop offset="42%" stop-color="#7fd06a"/>
+          <stop offset="100%" stop-color="#2c7b45"/>
+        </radialGradient>
+        <g id="nxClover">
+          <ellipse cx="0" cy="-5.4" rx="4.6" ry="5.2" fill="url(#nxLeaf)" stroke="#61ae4c" stroke-width=".8"/>
+          <ellipse cx="5.4" cy="0" rx="5.2" ry="4.6" fill="url(#nxLeaf)" stroke="#61ae4c" stroke-width=".8"/>
+          <ellipse cx="0" cy="5.4" rx="4.6" ry="5.2" fill="url(#nxLeaf)" stroke="#61ae4c" stroke-width=".8"/>
+          <ellipse cx="-5.4" cy="0" rx="5.2" ry="4.6" fill="url(#nxLeaf)" stroke="#61ae4c" stroke-width=".8"/>
+          <circle cx="0" cy="0" r="1.3" fill="#f2fcdd"/>
+        </g>
+      </defs>
+      <!-- 整头下移 14：下巴贴着边框，与手之间不留空档 -->
+      <g transform="translate(0,14)">
+      <!-- 白色贴纸描边（头 + 双耳） -->
+      <g fill="#ffffff" stroke="#ffffff" stroke-width="7" stroke-linejoin="round">
+        <ellipse cx="50" cy="37" rx="33" ry="30"/>
+        <path d="M73 33c7-4.4 15.4-8.8 21.4-14.6 2.2 9.6-1.4 20.4-10 27-4.8 3.6-10.6 1.4-11.4-6.4z"/>
+        <path d="M27 33c-7-4.4-15.4-8.8-21.4-14.6-2.2 9.6 1.4 20.4 10 27 4.8 3.6 10.6 1.4 11.4-6.4z"/>
+      </g>
+      <!-- 精灵耳 -->
+      <path d="M73 33c7-4.4 15.4-8.8 21.4-14.6 2.2 9.6-1.4 20.4-10 27-4.8 3.6-10.6 1.4-11.4-6.4z" fill="url(#nxSkin)" stroke="#eab894" stroke-width="1"/>
+      <path d="M27 33c-7-4.4-15.4-8.8-21.4-14.6-2.2 9.6 1.4 20.4 10 27 4.8 3.6 10.6 1.4 11.4-6.4z" fill="url(#nxSkin)" stroke="#eab894" stroke-width="1"/>
+      <path d="M76 35c4.6-3.6 9.8-6.8 14.6-10.6-1.2 6.8-4.6 13-9.6 16.8" fill="none" stroke="#e7b28d" stroke-width="1.1" stroke-linecap="round"/>
+      <path d="M24 35c-4.6-3.6-9.8-6.8-14.6-10.6 1.2 6.8 4.6 13 9.6 16.8" fill="none" stroke="#e7b28d" stroke-width="1.1" stroke-linecap="round"/>
+      <!-- 后发 -->
+      <ellipse cx="50" cy="37" rx="33" ry="30" fill="url(#nxHair)"/>
+      <path d="M19 30c-6 13-7 28-5.2 41 4.2-3.2 8.4-3.8 11.6-3.2C23 54 23.6 40 27.6 28z" fill="url(#nxHair)"/>
+      <path d="M81 30c6 13 7 28 5.2 41-4.2-3.2-8.4-3.8-11.6-3.2 2.4-13.8 1.8-27.8-2.2-39.8z" fill="url(#nxHair)"/>
+      <path d="M22 46c-2.6 9-2.8 18.6-1.6 26.6" fill="none" stroke="#cfe8b8" stroke-width="1.2" stroke-linecap="round" opacity=".9"/>
+      <path d="M78 46c2.6 9 2.8 18.6 1.6 26.6" fill="none" stroke="#cfe8b8" stroke-width="1.2" stroke-linecap="round" opacity=".9"/>
+      <!-- 脸 -->
+      <ellipse cx="50" cy="40" rx="24.5" ry="23" fill="url(#nxSkin)"/>
+      <ellipse cx="26.6" cy="42" rx="3.2" ry="5" fill="#f7d4bd"/>
+      <ellipse cx="73.4" cy="42" rx="3.2" ry="5" fill="#f7d4bd"/>
+      <!-- 刘海 -->
+      <path d="M25 28C27.2 12.8 37 5 50 5s22.8 7.8 25 23c-4.8-7-10.6-9-15-5.4-2.6 2.1-5 4.2-7.3 4.2s-4.7-2.1-7.3-4.2c-4.4-3.6-10.2-1.6-15 5.4z" fill="url(#nxHair)"/>
+      <path d="M50 6.4c9.4 0 16.6 4.8 20.8 13.6-5.2-4.8-9.8-5.8-13-2.8-2.4 2-4.4 3.8-7.8 3.8z" fill="#ffffff" opacity=".38"/>
+      <!-- 腮红 -->
+      <ellipse cx="31" cy="49.6" rx="5.4" ry="3.2" fill="#f7a8a2" opacity=".5"/>
+      <ellipse cx="69" cy="49.6" rx="5.4" ry="3.2" fill="#f7a8a2" opacity=".5"/>
+      <!-- 眉 -->
+      <path d="M33 31.2c2.2-1.8 5-1.7 7 .6M67 31.2c-2.2-1.8-5-1.7-7 .6" fill="none" stroke="#c3d9b2" stroke-width="1.3" stroke-linecap="round"/>
+      <!-- 眼 -->
+      <ellipse cx="39" cy="41" rx="7.3" ry="8.8" fill="#2c7b45"/>
+      <ellipse cx="61" cy="41" rx="7.3" ry="8.8" fill="#2c7b45"/>
+      <ellipse cx="39" cy="42" rx="5.7" ry="7" fill="url(#nxEye)"/>
+      <ellipse cx="61" cy="42" rx="5.7" ry="7" fill="url(#nxEye)"/>
+      <circle cx="36.6" cy="38.2" r="2.5" fill="#ffffff"/>
+      <circle cx="58.6" cy="38.2" r="2.5" fill="#ffffff"/>
+      <circle cx="41.2" cy="45.6" r="1.3" fill="#ffffff" opacity=".75"/>
+      <circle cx="63.2" cy="45.6" r="1.3" fill="#ffffff" opacity=".75"/>
+      <!-- 张嘴笑 -->
+      <path d="M44.4 52.4c1.6-1 3.2-1.5 5.6-1.5s4 .5 5.6 1.5c-.8 4.4-2.8 6.8-5.6 6.8s-4.8-2.4-5.6-6.8z" fill="#8e3f49"/>
+      <path d="M46.4 53.6c1-.6 2.2-.9 3.6-.9s2.6.3 3.6.9c-.6 2-1.9 3-3.6 3s-3-1-3.6-3z" fill="#f29fa6"/>
+      <!-- 头顶：四叶草 + 叶片 + 小金饰 -->
+      <use href="#nxClover" transform="translate(75,13) rotate(18) scale(.86)"/>
+      <path d="M62 16c3.6-8 11-9.4 15-5.8 1.3 3.6-2.6 10.4-10 11.2-3.2.4-5.8-2-5-5.4z" fill="#6cc154"/>
+      <path d="M61 18.4c7.6-3.2 13.8-2 16.4 2.4-4.4 4-11.8 3.4-16.4-2.4z" fill="#9fe27a"/>
+      <circle cx="79.4" cy="6.6" r="2.4" fill="#f0cf78" stroke="#d9ab44" stroke-width=".7"/>
+      </g>
+    </svg>
+
+    <!-- 同位置的前层：只有两只手，盖在横幅边框之上（viewBox/尺寸/位置与后层完全一致） -->
+    <svg class="chibi cTR front" viewBox="0 0 100 88" aria-hidden="true">
+      <!-- 手掌外圈的白色贴纸描边 -->
+      <g fill="#ffffff" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">
+        <rect x="24.2" y="70.2" width="18" height="19.4" rx="7.4"/>
+        <rect x="57.8" y="70.2" width="18" height="19.4" rx="7.4"/>
+      </g>
+      <!-- 三根手指 + 手掌（ellipse 恰好 2 个 = 两只手掌） -->
+      <g fill="url(#nxSkin)" stroke="#e9bb9d" stroke-width=".95">
+        <rect x="26.8" y="74.4" width="4.2" height="11" rx="2.1"/>
+        <rect x="31.4" y="72.6" width="4.2" height="12.8" rx="2.1"/>
+        <rect x="36" y="74.4" width="4.2" height="11" rx="2.1"/>
+        <ellipse cx="33.2" cy="84.2" rx="7.6" ry="5.8"/>
+        <rect x="60.4" y="74.4" width="4.2" height="11" rx="2.1"/>
+        <rect x="65" y="72.6" width="4.2" height="12.8" rx="2.1"/>
+        <rect x="69.6" y="74.4" width="4.2" height="11" rx="2.1"/>
+        <ellipse cx="66.8" cy="84.2" rx="7.6" ry="5.8"/>
+      </g>
+      <!-- 指缝 -->
+      <g fill="none" stroke="#e0b092" stroke-width=".85" stroke-linecap="round" opacity=".85">
+        <path d="M31.4 77v6.4M36 77.4v6M60.4 77.4v6M65 77v6.4"/>
+      </g>
+      <!-- 指节高光 -->
+      <g fill="#ffffff" opacity=".45">
+        <ellipse cx="30.6" cy="78.4" rx="1.7" ry="2.6"/>
+        <ellipse cx="64.2" cy="78.4" rx="1.7" ry="2.6"/>
+      </g>
+    </svg>
+
+    <!-- ===== 横幅本体 ===== -->
+    <!-- ===== 自定义皮肤：相册 / 相机图片覆盖横幅外观（垫在 .gbsvg 之下、文字与小角色之上） ===== -->
+    <img class="skinimg" id="btnSkin" alt="" aria-hidden="true">
+    <div class="skinscrim" id="btnSkinScrim"></div>
+    <svg class="gbsvg" viewBox="0 0 404 96" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <filter id="gbWavy" x="-8%" y="-32%" width="116%" height="164%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.05 0.072" numOctaves="2" seed="7" result="n"/>
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="3.6" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+        <linearGradient id="gbGreen" x1="0%" y1="0%" x2="86%" y2="118%">
+          <stop offset="0%" stop-color="#f8fbce"/>
+          <stop offset="11%" stop-color="#f0f9b2"/>
+          <stop offset="26%" stop-color="#daf1a2"/>
+          <stop offset="43%" stop-color="#b6e48f"/>
+          <stop offset="60%" stop-color="#8bd079"/>
+          <stop offset="78%" stop-color="#48a25c"/>
+          <stop offset="100%" stop-color="#22804a"/>
+        </linearGradient>
+        <radialGradient id="gbGloss" cx="17%" cy="-6%" r="52%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity=".6"/>
+          <stop offset="55%" stop-color="#ffffff" stop-opacity=".14"/>
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="gbLight" cx="21%" cy="58%" r="45%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity=".6"/>
+          <stop offset="64%" stop-color="#ffffff" stop-opacity=".16"/>
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="gbGold" x1="10%" y1="0%" x2="74%" y2="100%">
+          <stop offset="0%" stop-color="#fff8db"/>
+          <stop offset="34%" stop-color="#ffe07e"/>
+          <stop offset="72%" stop-color="#f3bb45"/>
+          <stop offset="100%" stop-color="#db9a26"/>
+        </linearGradient>
+        <linearGradient id="gbVineG" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#f0d9a0"/>
+          <stop offset="100%" stop-color="#c69f55"/>
+        </linearGradient>
+        <linearGradient id="gbLeafG" x1="18%" y1="0%" x2="76%" y2="100%">
+          <stop offset="0%" stop-color="#e8f9c9"/>
+          <stop offset="100%" stop-color="#9bd56e"/>
+        </linearGradient>
+        <radialGradient id="gbCoinG" cx="34%" cy="26%" r="80%">
+          <stop offset="0%" stop-color="#fffbe4"/>
+          <stop offset="44%" stop-color="#fde08b"/>
+          <stop offset="100%" stop-color="#e3ac3c"/>
+        </radialGradient>
+        <g id="gbClover">
+          <ellipse cx="0" cy="-6.4" rx="5.2" ry="6" fill="url(#gbLeafG)" stroke="#6ab64f" stroke-width=".9"/>
+          <ellipse cx="6.4" cy="0" rx="6" ry="5.2" fill="url(#gbLeafG)" stroke="#6ab64f" stroke-width=".9"/>
+          <ellipse cx="0" cy="6.4" rx="5.2" ry="6" fill="url(#gbLeafG)" stroke="#6ab64f" stroke-width=".9"/>
+          <ellipse cx="-6.4" cy="0" rx="6" ry="5.2" fill="url(#gbLeafG)" stroke="#6ab64f" stroke-width=".9"/>
+          <circle cx="0" cy="0" r="1.5" fill="#f6fde6"/>
+          <ellipse cx="-1.7" cy="-8.6" rx="2.1" ry="2.7" fill="#ffffff" opacity=".45"/>
+        </g>
+        <g id="gbCloverG">
+          <ellipse cx="0" cy="-5" rx="4.1" ry="4.7" fill="url(#gbGold)" stroke="#dda93a" stroke-width=".8"/>
+          <ellipse cx="5" cy="0" rx="4.7" ry="4.1" fill="url(#gbGold)" stroke="#dda93a" stroke-width=".8"/>
+          <ellipse cx="0" cy="5" rx="4.1" ry="4.7" fill="url(#gbGold)" stroke="#dda93a" stroke-width=".8"/>
+          <ellipse cx="-5" cy="0" rx="4.7" ry="4.1" fill="url(#gbGold)" stroke="#dda93a" stroke-width=".8"/>
+          <circle cx="0" cy="0" r="1.2" fill="#fffbe8"/>
+        </g>
+        <g id="gbCoin">
+          <circle cx="0" cy="0" r="12" fill="url(#gbCoinG)" stroke="#cf9024" stroke-width="1.3"/>
+          <circle cx="0" cy="0" r="8.9" fill="none" stroke="#fff3c0" stroke-width="1.1" opacity=".9"/>
+          <path d="M0,-5.6C.8,-1.5 1.5,-.8 5.6,0 1.5,.8 .8,1.5 0,5.6 -.8,1.5 -1.5,.8 -5.6,0 -1.5,-.8 -.8,-1.5 0,-5.6Z" fill="#fff8d8"/>
+        </g>
+        <g id="gbStar">
+          <path d="M0,-8.8C1.1,-3.2 2.6,-1.6 8.8,0 2.6,1.6 1.1,3.2 0,8.8 -1.1,3.2 -2.6,1.6 -8.8,0 -2.6,-1.6 -1.1,-3.2 0,-8.8Z" fill="url(#gbGold)" stroke="#dda63a" stroke-width="1"/>
+        </g>
+        <g id="gbSpark">
+          <path d="M0,-7.2C.9,-2.1 2.1,-.9 7.2,0 2.1,.9 .9,2.1 0,7.2 -.9,2.1 -2.1,.9 -7.2,0 -2.1,-.9 -.9,-2.1 0,-7.2Z"/>
+        </g>
+        <g id="gbDia">
+          <path d="M0,-5.8 3.7,0 0,5.8 -3.7,0Z" fill="url(#gbGold)" stroke="#dda63a" stroke-width=".9"/>
+          <path d="M0,-2.3 1.5,0 0,2.3 -1.5,0Z" fill="#fff8dc"/>
+        </g>
+        <g id="gbLeaf">
+          <path d="M0,0C3.4,-3.8 8.4,-4.8 12,-2.9 8.4,4.2 2.6,4.6 0,0Z" fill="url(#gbLeafG)" stroke="#7cbb5c" stroke-width=".7"/>
+        </g>
+      </defs>
+
+      <!-- 奶油扇贝花边 + 内圈金线 -->
+      <rect x="4.5" y="4.5" width="395" height="87" rx="30" fill="#fffdf3" filter="url(#gbWavy)"/>
+      <rect x="8.8" y="8.8" width="386.4" height="78.4" rx="26" fill="none" stroke="#eccd8b" stroke-width="1.5" filter="url(#gbWavy)"/>
+
+      <!-- 主体：淡黄绿 → 祖母绿的斜向渐变 -->
+      <rect x="13.8" y="13.8" width="376.4" height="68.4" rx="23" fill="url(#gbGreen)" filter="url(#gbWavy)"/>
+      <rect x="13.8" y="13.8" width="376.4" height="68.4" rx="23" fill="url(#gbLight)"/>
+      <rect x="13.8" y="13.8" width="376.4" height="68.4" rx="23" fill="url(#gbGloss)"/>
+      <rect x="17" y="17" width="369.8" height="61.8" rx="20" fill="none" stroke="#ffffff" stroke-width="2" opacity=".5"/>
+
+      <!-- 金色藤蔓（左上 / 右下两段）+ 叶子 -->
+      <g fill="none" stroke="url(#gbVineG)" stroke-width="1.7" stroke-linecap="round">
+        <path d="M26 27C56 14 96 30 134 17"/>
+        <path d="M380 64C352 80 316 68 288 79C260 90 214 87 190 85"/>
+      </g>
+      <use href="#gbLeaf" transform="translate(46,20) rotate(-26) scale(.9)"/>
+      <use href="#gbLeaf" transform="translate(90,25) rotate(14) scale(.8)"/>
+      <use href="#gbLeaf" transform="translate(120,17) rotate(-32) scale(.85)"/>
+      <use href="#gbLeaf" transform="translate(302,74) rotate(-152) scale(.9)"/>
+      <use href="#gbLeaf" transform="translate(262,85) rotate(-198) scale(.95)"/>
+      <use href="#gbLeaf" transform="translate(226,88) rotate(-158) scale(.8)"/>
+      <use href="#gbLeaf" transform="translate(198,82) rotate(-138) scale(.85)"/>
+      <use href="#gbDia" transform="translate(70,22) scale(.7)"/>
+      <use href="#gbDia" transform="translate(342,72) scale(.66)"/>
+      <use href="#gbDia" transform="translate(198,11.5) scale(.62)"/>
+      <use href="#gbDia" transform="translate(198,84) scale(.58)"/>
+
+      <!-- 绿色四叶草 ×5 -->
+      <use href="#gbClover" transform="translate(30,34) rotate(-16) scale(.95)"/>
+      <use href="#gbClover" transform="translate(118,80) rotate(12) scale(.8)"/>
+      <use href="#gbClover" transform="translate(348,27) rotate(14) scale(.72)"/>
+      <use href="#gbClover" transform="translate(391,66) rotate(-8) scale(.6)"/>
+      <use href="#gbClover" transform="translate(96,64) rotate(-20) scale(.6)"/>
+
+      <!-- 金色四叶草 ×2 -->
+      <use href="#gbCloverG" transform="translate(152,26) rotate(-14) scale(1.15)"/>
+      <use href="#gbCloverG" transform="translate(374,52) rotate(10)"/>
+
+      <!-- 金币 ×2 -->
+      <use href="#gbCoin" transform="translate(32,74) scale(.86)"/>
+      <use href="#gbCoin" transform="translate(372,74) scale(.8)"/>
+
+      <!-- 金色四角星 -->
+      <use href="#gbStar" transform="translate(62,20) scale(.62)"/>
+      <use href="#gbStar" transform="translate(330,20) scale(.7)"/>
+      <use href="#gbStar" transform="translate(352,52) scale(.5)"/>
+      <use href="#gbStar" transform="translate(252,84) scale(.46)"/>
+
+      <!-- 白色星芒 ×6 -->
+      <use href="#gbSpark" transform="translate(80,22) scale(.56)" fill="#ffffff" opacity=".95"/>
+      <use href="#gbSpark" transform="translate(316,22) scale(.5)" fill="#ffffff" opacity=".85"/>
+      <use href="#gbSpark" transform="translate(338,48) scale(.62)" fill="#fff8e0" opacity=".9"/>
+      <use href="#gbSpark" transform="translate(56,60) scale(.44)" fill="#ffffff" opacity=".8"/>
+      <use href="#gbSpark" transform="translate(272,80) scale(.46)" fill="#ffffff" opacity=".9"/>
+      <use href="#gbSpark" transform="translate(126,86) scale(.4)" fill="#fffbea" opacity=".9"/>
+
+      <!-- 彩屑 -->
+      <rect x="-1.6" y="-4.6" width="3.2" height="9.2" rx="1.6" fill="#ffe9a8" transform="translate(150,88) rotate(24)"/>
+      <rect x="-1.6" y="-4.6" width="3.2" height="9.2" rx="1.6" fill="#c3f0a6" transform="translate(210,8) rotate(-30)"/>
+      <rect x="-1.6" y="-4.6" width="3.2" height="9.2" rx="1.6" fill="#ffc9de" transform="translate(282,88) rotate(12)"/>
+      <rect x="-1.6" y="-4.6" width="3.2" height="9.2" rx="1.6" fill="#c6e6ff" transform="translate(316,8) rotate(38)"/>
+      <rect x="-1.6" y="-4.6" width="3.2" height="9.2" rx="1.6" fill="#fff5c9" transform="translate(64,10) rotate(-16)"/>
+      <rect x="-1.6" y="-4.6" width="3.2" height="9.2" rx="1.6" fill="#ffe9a8" transform="translate(348,42) rotate(28)"/>
+    </svg>
+
+    <!-- ===== 左下角：站在横幅左下角前的半身小家伙（挥手） ===== -->
+    <svg class="chibi cBL" viewBox="0 0 96 128" aria-hidden="true">
+      <!-- 白色贴纸描边 -->
+      <g fill="#ffffff" stroke="#ffffff" stroke-width="7" stroke-linejoin="round">
+        <ellipse cx="46" cy="38" rx="33" ry="31"/>
+        <path d="M68 36c6.6-4.2 14.6-8.4 20.4-13.8 2 9-1.4 19-9.4 25-4.4 3.2-9.6 1-11-5.2z"/>
+        <path d="M24 36c-6.6-4.2-14.6-8.4-20.4-13.8-2 9 1.4 19 9.4 25 4.4 3.2 9.6 1 11-5.2z"/>
+      </g>
+      <!-- 精灵耳 -->
+      <path d="M68 36c6.6-4.2 14.6-8.4 20.4-13.8 2 9-1.4 19-9.4 25-4.4 3.2-9.6 1-11-5.2z" fill="url(#nxSkin)" stroke="#eab894" stroke-width="1"/>
+      <path d="M24 36c-6.6-4.2-14.6-8.4-20.4-13.8-2 9 1.4 19 9.4 25 4.4 3.2 9.6 1 11-5.2z" fill="url(#nxSkin)" stroke="#eab894" stroke-width="1"/>
+      <!-- 后发 -->
+      <ellipse cx="46" cy="38" rx="33" ry="31" fill="url(#nxHair)"/>
+      <path d="M15 32c-6.4 13.6-7.4 29.4-5.6 43 4.4-3.2 8.8-3.8 12.2-3.2C19.4 57 20 42.6 24 30.6z" fill="url(#nxHair)"/>
+      <path d="M77 32c6.4 13.6 7.4 29.4 5.6 43-4.4-3.2-8.8-3.8-12.2-3.2 2.2-14.8 1.6-29.2-2.4-41.2z" fill="url(#nxHair)"/>
+      <!-- 脸 -->
+      <ellipse cx="46" cy="42" rx="23.5" ry="22" fill="url(#nxSkin)"/>
+      <ellipse cx="23.8" cy="44" rx="3.1" ry="4.8" fill="#f7d4bd"/>
+      <ellipse cx="68.2" cy="44" rx="3.1" ry="4.8" fill="#f7d4bd"/>
+      <!-- 刘海 -->
+      <path d="M22.5 30C24.7 15 34.3 7.6 46 7.6s21.3 7.4 23.5 22.4c-4.6-6.8-10.2-8.8-14.4-5.2-2.5 2-4.8 4-7 4s-4.5-2-7-4c-4.2-3.6-9.8-1.6-13.6 5.2z" fill="url(#nxHair)"/>
+      <path d="M46 9c8.9 0 15.7 4.5 19.7 12.8-4.9-4.5-9.3-5.5-12.3-2.7-2.3 1.9-4.2 3.6-7.4 3.6z" fill="#ffffff" opacity=".38"/>
+      <!-- 腮红 -->
+      <ellipse cx="28.4" cy="51.4" rx="5.2" ry="3.1" fill="#f7a8a2" opacity=".5"/>
+      <ellipse cx="63.6" cy="51.4" rx="5.2" ry="3.1" fill="#f7a8a2" opacity=".5"/>
+      <!-- 眉 -->
+      <path d="M30.6 33.6c2.1-1.7 4.8-1.6 6.7.6M61.4 33.6c-2.1-1.7-4.8-1.6-6.7.6" fill="none" stroke="#c3d9b2" stroke-width="1.2" stroke-linecap="round"/>
+      <!-- 眼：左眼睁大、右眼笑弯 -->
+      <ellipse cx="35.6" cy="43" rx="6.9" ry="8.4" fill="#2c7b45"/>
+      <ellipse cx="35.6" cy="44" rx="5.4" ry="6.7" fill="url(#nxEye)"/>
+      <circle cx="33.4" cy="40.4" r="2.3" fill="#ffffff"/>
+      <circle cx="37.6" cy="47.2" r="1.2" fill="#ffffff" opacity=".75"/>
+      <path d="M52.2 43.4c2.4-3.6 6.4-3.6 8.8 0" fill="none" stroke="#2c7b45" stroke-width="2.6" stroke-linecap="round"/>
+      <!-- 张嘴笑 -->
+      <path d="M40.6 54c1.5-1 3-1.4 5.2-1.4s3.7.4 5.2 1.4c-.8 4-2.6 6.2-5.2 6.2s-4.4-2.2-5.2-6.2z" fill="#8e3f49"/>
+      <path d="M42.4 55.2c1-.5 2-.8 3.4-.8s2.4.3 3.4.8c-.6 1.8-1.8 2.8-3.4 2.8s-2.8-1-3.4-2.8z" fill="#f29fa6"/>
+      <!-- 头顶：叶片 + 四叶草 + 金饰 -->
+      <path d="M56.5 13.6c4.2-8.2 12-9.4 15.8-5.8 1.3 3.6-2.7 10.8-10.5 11.6-3.4.4-6.2-2.2-5.3-5.8z" fill="#6cc154"/>
+      <path d="M55.6 15.8c7.6-3.2 13.8-2 16.4 2.4-4.4 4-11.8 3.4-16.4-2.4z" fill="#9fe27a"/>
+      <use href="#nxClover" transform="translate(23,22) rotate(-18) scale(.95)"/>
+      <circle cx="73" cy="9.6" r="2.3" fill="#f0cf78" stroke="#d9ab44" stroke-width=".7"/>
+      <!-- 身体：白上衣 + 浅绿披肩 + 金四叶草胸针（浅色搭配，深色底上也立得住） -->
+      <path d="M46 66c-12.5 0-21 7.6-23.6 19L19 118h54l-3.4-33C67 73.6 58.5 66 46 66z"
+            fill="url(#nxDress)" stroke="#dfeecd" stroke-width="1"/>
+      <path d="M32 74.6c4 4.4 8.6 6.6 14 6.6s10-2.2 14-6.6l3 13.4c-5 4.4-10.6 6.6-17 6.6s-12-2.2-17-6.6z" fill="#5fae52"/>
+      <path d="M32 74.6c4 4.4 8.6 6.6 14 6.6s10-2.2 14-6.6l1 4.6c-4.2 4-9 6-15 6s-10.8-2-15-6z" fill="#3f7d43"/>
+      <path d="M34.6 87.6c3.2 2.2 6.6 3.3 11.4 3.3s8.2-1.1 11.4-3.3" fill="none" stroke="#3f7d43" stroke-width="1.1" opacity=".7"/>
+      <circle cx="46" cy="81.4" r="3.4" fill="#f0cf78" stroke="#cfa63f" stroke-width=".9"/>
+      <path d="M44.6 80c.9-1.1 2.4-1.1 3.4 0M44.6 82.6c.9 1.1 2.4 1.1 3.4 0" fill="none" stroke="#cfa63f" stroke-width=".7" stroke-linecap="round"/>
+      <path d="M23.6 88c-2 8-3 17-2.8 26M68.4 88c2 8 3 17 2.8 26" fill="none" stroke="#cfe3b8" stroke-width="1.1" opacity=".8"/>
+      <!-- 抬手挥挥：手臂 + 白荷叶袖 + 张开的手 -->
+      <path d="M60 76c5.6-3.6 11-9.4 14.8-16" fill="none" stroke="url(#nxSkin)" stroke-width="9.4" stroke-linecap="round"/>
+      <path d="M66 60.6c4.6-5.4 10.6-9.6 16.4-11.2l2.6 6.4c-5.4 2.6-10.2 6.6-14 11.8z" fill="#ffffff" stroke="#e2efd6" stroke-width="1"/>
+      <ellipse cx="80" cy="50.4" rx="7.6" ry="6.4" fill="url(#nxSkin)" stroke="#e9bb9d" stroke-width=".9" transform="rotate(-24 80 50.4)"/>
+      <g fill="none" stroke="#e0b092" stroke-width=".8" stroke-linecap="round" opacity=".85">
+        <path d="M77.4 44.8 75.6 49.4M81.6 43 80 48M85.6 42.8 84.4 48"/>
+      </g>
+      <!-- 落下的那只手 -->
+      <ellipse cx="27" cy="96" rx="7.6" ry="5.8" fill="#ffffff" stroke="#e2efd6" stroke-width=".9"/>
+      <ellipse cx="27" cy="95" rx="6.2" ry="4.8" fill="url(#nxSkin)" stroke="#e9bb9d" stroke-width=".9"/>
+      <g fill="none" stroke="#e0b092" stroke-width=".8" stroke-linecap="round" opacity=".85">
+        <path d="M24.4 92.4v3.4M27 91.8v4.2M29.6 92.4v3.4"/>
+      </g>
+    </svg>
+    <span class="gbl" data-t="祈愿·1"><span class="gbt">祈愿·1</span></span>
+  </button>
+
+  <div class="foot">
+    抽卡机制与演出动画为原神「祈愿」风格复刻；全部概率均可在「对象管理 → 概率设置」中自由调节。<br>
+    默认：五星 0.6% 基础 / 第 74 抽起每抽 +6% / 90 抽硬保底；四星 5.1% / 10 抽保底；UP 命中 50%。
+  </div>
+</div>
+
+<div id="fxLayer">
+  <canvas id="fxCanvas"></canvas>
+  <div class="vig"></div>
+  <div class="hitmsg" id="hitMsg"></div>
+  <div class="skipbtn" id="skipBtn">点击跳过</div>
+</div>
+
+<div id="rvLayer">
+  <div class="rvdeco" id="rvDeco" aria-hidden="true"></div>
+  <div class="rays" id="rays"></div>
+  <div id="rvTitle">祈 愿 结 果</div>
+  <div id="rvStage"></div>
+  <div id="rvGrid"></div>
+  <div id="rvFooter"></div>
+  <div class="flash" id="rvFlash"></div>
+</div>
+
+<div class="mask" id="mask">
+  <div class="modal">
+    <div class="mhd"><h3 id="mTitle">标题</h3><div class="mclose" id="mClose">✕</div></div>
+    <div class="mtabs" id="mTabs" style="display:none"></div>
+    <div class="mbd" id="mBody"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   1. 配置
+   ========================================================= */
+const SAVE = 'wish-sim-v2';
+
+/* 卡池：抽卡界面已移除，这里只保留概率分支所需的 type */
+const BANNERS = [
+  {id:'char', type:'char'},
+  {id:'std',  type:'std'},
+];
+
+/* =========================================================
+   2. 状态
+   ========================================================= */
+const state = {
+  items: [],                      // {id,name,rarity,tag,up,weight}
+  rates: null,                    // 见 RATES_DEFAULT
+  meta: {
+    char: {name:'「星轨之约」', sub:'活动祈愿。被标记为 UP 的对象将获得概率提升。'},
+    std:  {name:'「万象常驻」', sub:'常驻祈愿。卡池内全部对象均可能获得。'},
+  },
+  owned: {},
+  history: [],
+  stats: {total:0, r5:0, r4:0, r3:0, sc:0, sd:0},
+  pity: {},
+  banner: 'char',
+  /* 自定义壁纸（二进制存 IndexedDB，这里只存元信息） */
+  wall: { src:'default', name:'', kind:'image', fit:'cover', blur:0, dim:46, vig:true, kb:false },
+  audio: { on:true, vol:78 },
+  /* 「祈愿」按钮外观：scale = 尺寸倍率 */
+  /* scale = 尺寸倍率；skin = 自定义按钮皮肤（图片二进制存 IndexedDB） */
+  btn: { scale: 1, skin: { on:false, fit:'cover', ratio:false, dim:14, radius:0, text:false, chibi:false, name:'', sv:2 } },
+};
+BANNERS.forEach(b=>{ state.pity[b.id] = {c5:0, c4:0, guar5:false, guar4:false}; });
+
+function load(){
+  let d = null;
+  try{ const raw = localStorage.getItem(SAVE); if(raw) d = JSON.parse(raw); }catch(e){}
+  if(d){
+    Object.assign(state, d);
+    delete state.gem; delete state.fates;   /* 货币体系已整体移除 */
+    state.meta  = Object.assign({char:{name:'',sub:''},std:{name:'',sub:''}}, d.meta||{});
+    state.stats = Object.assign({total:0,r5:0,r4:0,r3:0,sc:0,sd:0}, d.stats||{});
+    BANNERS.forEach(b=>{ if(!state.pity[b.id]) state.pity[b.id]={c5:0,c4:0,guar5:false,guar4:false}; });
+  }
+  if(!Array.isArray(state.items)) state.items = [];
+  if(!state.owned || typeof state.owned !== 'object') state.owned = {};
+  if(!Array.isArray(state.history)) state.history = [];
+  state.rates = Object.assign({}, RATES_DEFAULT, state.rates||{});
+  Object.keys(RATES_DEFAULT).forEach(k=>{
+    const v = Number(state.rates[k]);
+    state.rates[k] = isFinite(v) ? v : RATES_DEFAULT[k];
+  });
+  state.items.forEach(i=>{ i.weight = isFinite(Number(i.weight)) ? Math.max(0, Number(i.weight)) : 1; });
+  state.wall  = Object.assign({src:'default',name:'',kind:'image',fit:'cover',blur:0,dim:46,vig:true,kb:false}, state.wall||{});
+  state.audio = Object.assign({on:true,vol:78}, state.audio||{});
+  state.btn   = Object.assign({scale:1}, state.btn||{});
+  state.btn.scale = clampBtnScale(state.btn.scale);
+  const skinV = Number((state.btn.skin || {}).sv) || 1;   /* 没有版本号 = 旧版（v1） */
+  state.btn.skin = Object.assign(
+    { on:false, fit:'cover', ratio:false, dim:14, radius:0, text:false, chibi:false, name:'', sv:2 },
+    state.btn.skin || {});
+  if(!['cover','contain'].includes(state.btn.skin.fit)) state.btn.skin.fit = 'cover';
+  state.btn.skin.on     = !!state.btn.skin.on;
+  state.btn.skin.ratio  = !!state.btn.skin.ratio;
+  state.btn.skin.text   = state.btn.skin.text  === true;
+  state.btn.skin.chibi  = state.btn.skin.chibi === true;
+  /* v1 的默认是「在图片上叠加按钮文字和小角色」——图片若自带文字就会重影。
+     v2 改成「图片优先」，旧存档一次性跟随新默认；想叠加在面板里重新勾上即可。 */
+  if(skinV < 2){ state.btn.skin.text = false; state.btn.skin.chibi = false; }
+  state.btn.skin.sv = 2;
+  state.btn.skin.dim    = Math.max(0, Math.min(70, Number(state.btn.skin.dim) || 0));
+  state.btn.skin.radius = Math.max(0, Math.min(30, Number(state.btn.skin.radius) || 0));
+  state.btn.skin.name   = String(state.btn.skin.name || '').slice(0, 40);
+  if(!['cover','contain'].includes(state.wall.fit)) state.wall.fit = 'cover';
+  if(!['image','video','camera'].includes(state.wall.kind)) state.wall.kind = 'image';
+  state.wall.dim  = Math.max(0, Math.min(90, Number(state.wall.dim)||0));
+  state.wall.blur = Math.max(0, Math.min(30, Number(state.wall.blur)||0));
+}
+function save(){ try{ localStorage.setItem(SAVE, JSON.stringify(state)); }catch(e){} }
+
+/* ---------- 「祈愿」按钮尺寸：倍率夹取 + 应用 + 页脚避让 ---------- */
+const BTN_SCALE_MIN = 0.6, BTN_SCALE_MAX = 1.5;
+function clampBtnScale(v){
+  const n = Number(v);
+  if(!isFinite(n) || n <= 0) return 1;
+  return Math.round(Math.min(BTN_SCALE_MAX, Math.max(BTN_SCALE_MIN, n)) * 100) / 100;
+}
+/* 把倍率写到 --sc，并按按钮实际占位决定页脚是「左对齐让位」还是「整体上抬」 */
+function applyBtnScale(){
+  const b = document.getElementById('p1');
+  if(!b) return;
+  b.style.setProperty('--sc', state.btn.scale);
+  /* 尺寸变了，贴合图片比例的按钮高度要跟着重算（内部会同步页脚避让）。
+     BSKIN 用 const 声明但 boot() 在 DOMContentLoaded 后才跑，此处必然已初始化。 */
+  BSKIN.applyRatio();
+}
+function syncWishLayout(){
+  const b = document.getElementById('p1'), wrap = document.querySelector('.wrap'), foot = document.querySelector('.foot');
+  if(!b || !wrap || !foot) return;
+  const r = b.getBoundingClientRect();
+  const gapR = Math.max(0, window.innerWidth - r.right);
+  /* 边框上趴着的小家伙向上溢出按钮，避让要按「按钮 + 小角色」的整体视觉并集算 */
+  let top = r.top;
+  b.querySelectorAll('.chibi').forEach(k=>{ const q = k.getBoundingClientRect(); if(q.top < top) top = q.top; });
+  /* 页脚要空出的宽度 = 按钮宽 + 右侧留白 + 呼吸 */
+  const reserve = Math.round(r.width + gapR + 28);
+  const contentW = wrap.clientWidth - 40;            // 减去 .wrap 左右各 20px 内边距
+  document.documentElement.style.setProperty('--wishReserve', reserve + 'px');
+  /* 上抬量必须让页脚整体落在**视觉并集的上沿**之上（不是按钮底边，也不是按钮顶边——
+     右上的小角色会探到按钮顶边之上）。小角色只在竖向上溢出，水平避让仍按按钮宽度算即可 */
+  document.documentElement.style.setProperty('--wishLift', Math.round(window.innerHeight - top + 16) + 'px');
+  /* 剩余可用宽度太窄（文字会挤成窄条）就改为把页脚整体抬到按钮带之上 */
+  document.body.classList.toggle('wishlift', contentW - reserve < 260);
+}
+
+/* =========================================================
+   3. 概率与抽卡（全部可调）
+   ========================================================= */
+const RATES_DEFAULT = {
+  r5base:0.6,    // 五星基础概率 %
+  r5soft:74,     // 开始提升的抽数
+  r5step:6,      // 此后每抽提升 %
+  r5hard:90,     // 硬保底抽数
+  r4base:5.1,    // 四星基础概率 %
+  r4soft:56.1,   // 四星第 (r4hard-1) 抽概率 %
+  r4hard:10,     // 四星硬保底抽数
+  up:50,         // 活动祈愿 UP 命中概率 %
+};
+function R(){ if(!state.rates) state.rates = Object.assign({}, RATES_DEFAULT); return state.rates; }
+function rate5(n){
+  const r = R();
+  if(n >= r.r5hard) return 1;
+  if(n < r.r5soft) return Math.min(1, r.r5base/100);
+  return Math.min(1, r.r5base/100 + (n - r.r5soft + 1) * r.r5step/100);
+}
+function rate4(n){
+  const r = R();
+  if(n >= r.r4hard) return 1;
+  if(n === r.r4hard - 1) return Math.min(1, r.r4soft/100);
+  return Math.min(1, r.r4base/100);
+}
+const rnd = a => a[(Math.random()*a.length)|0];
+const byR = r => state.items.filter(i=>i.rarity===r);
+const has = r => state.items.some(i=>i.rarity===r);
+
+/* 对象权重（同稀有度内按权重占比分配） */
+function wOf(i){ const w = Number(i.weight); return (isFinite(w) && w >= 0) ? w : 1; }
+const wsum = a => a.reduce((s,i)=>s+wOf(i), 0);
+function pickW(arr){
+  if(!arr || !arr.length) return null;
+  const tot = wsum(arr);
+  if(tot <= 0) return null;              // 全为 0 权重 → 该池无货，交由调用方回退
+  let x = Math.random() * tot;
+  for(const i of arr){ x -= wOf(i); if(x <= 0) return i; }
+  return arr[arr.length-1];
+}
+
+function doPull(b){
+  if(!state.items.length) return null;
+  const p = state.pity[b.id];
+  const upChance = R().up/100;
+  const okR = r => state.items.some(i=>i.rarity===r && wOf(i) > 0);
+
+  p.c5++; p.c4++;
+  let rarity = Math.random() < rate5(p.c5) ? 5 : (Math.random() < rate4(p.c4) ? 4 : 3);
+  if(!okR(rarity)) rarity = [5,4,3].find(okR);
+  if(rarity === undefined) return null;
+
+  const snapPity = p.c5;
+  let item = null, usedUpBranch = false, splitUsed = false;
+
+  if(rarity === 5 || rarity === 4){
+    const all = byR(rarity);
+    const ups = all.filter(i=>i.up && wOf(i) > 0);
+    const offs = all.filter(i=>!i.up && wOf(i) > 0);
+    const upOk = ups.length > 0, offOk = offs.length > 0;
+    if(b.type === 'char' && upOk && offOk){
+      const guar = (rarity === 5) ? p.guar5 : p.guar4;
+      const useUp = guar || Math.random() < upChance;
+      item = pickW(useUp ? ups : offs);
+      usedUpBranch = useUp;
+      splitUsed = true;
+      if(!item) item = pickW(useUp ? offs : ups);       // 目标池权重被清零 → 走另一池
+    } else {
+      item = pickW(upOk && b.type === 'char' ? ups : all);
+      if(!item) item = pickW(all);
+      usedUpBranch = !!(item && item.up);
+    }
+  } else {
+    item = pickW(byR(3));
+    if(!item) item = pickW(state.items.filter(i=>wOf(i) > 0));
+  }
+  if(!item) return null;
+
+  if(rarity === 5){
+    p.c5 = 0;
+    if(b.type === 'char') p.guar5 = splitUsed ? !usedUpBranch : !item.up;
+  }
+  if(rarity === 4){
+    p.c4 = 0;
+    if(b.type === 'char') p.guar4 = splitUsed ? !usedUpBranch : !item.up;
+  }
+
+  const isNew = !state.owned[item.id];
+  state.owned[item.id] = (state.owned[item.id]||0) + 1;
+  if(rarity===3) state.stats.sd += 15;
+  else if(rarity===4) state.stats.sc += isNew ? 2 : 3;
+  else state.stats.sc += isNew ? 10 : 25;
+
+  state.stats.total++;
+  state.stats['r'+rarity]++;
+  state.history.unshift({id:item.id, b:b.id, r:rarity, t:Date.now(), p:snapPity, neu:isNew});
+  if(state.history.length > 1200) state.history.length = 1200;
+  return {...item, isNew, rarity};
+}
+
+/* 概率试算（蒙特卡洛） */
+function simulate(N){
+  let c5=0,c4=0,five=0,four=0,three=0,n5=0,n4=0;
+  for(let i=0;i<N;i++){
+    c5++; c4++;
+    const r = Math.random() < rate5(c5) ? 5 : (Math.random() < rate4(c4) ? 4 : 3);
+    if(r===5){ five++; n5+=c5; c5=0; }
+    else if(r===4){ four++; n4+=c4; c4=0; }
+    else three++;
+  }
+  return { N, five, four, three,
+    p5: five/N, p4: four/N, p3: three/N,
+    avg5: five? n5/five : 0, avg4: four? n4/four : 0,
+    upRate: 1/(2 - Math.min(R().up,100)/100) };
+}
+function pullN(b, n){
+  const out = [];
+  for(let i=0;i<n;i++){ const r = doPull(b); if(r) out.push(r); }
+  return out;
+}
+
+/* =========================================================
+   4. 音效（WebAudio 合成）
+   ========================================================= */
+const SFX = {
+  ctx:null, master:null, verb:null, wet:null, on:true, ready:false,
+  _nb:null, _pad:null,
+
+  init(){
+    if(this.ready) return true;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) throw new Error('no AudioContext');
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = this.targetVol();
+      this.master.connect(this.ctx.destination);
+
+      /* 合成一段大教堂式的脉冲响应，做出视频里那种开阔的尾音 */
+      const conv = this.ctx.createConvolver();
+      conv.buffer = this.ir(3.4, 2.4);
+      this.wet = this.ctx.createGain(); this.wet.gain.value = 0.5;
+      conv.connect(this.wet); this.wet.connect(this.master);
+      this.verb = conv;
+
+      this.ready = true;
+    }catch(e){ this.on = false; }
+    return this.ready;
+  },
+  targetVol(){
+    const a = state.audio || {};
+    if(a.on === false) return 0;
+    return Math.max(0, Math.min(1, (a.vol==null?78:a.vol)/100));
+  },
+  setVol(v){
+    if(v != null && isFinite(v)){ if(!state.audio) state.audio = {}; state.audio.vol = Math.max(0, Math.min(100, v)); }
+    if(this.master) this.master.gain.value = this.targetVol();
+  },
+  resume(){ if(this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  now(){ return this.ctx ? this.ctx.currentTime : 0; },
+
+  ir(dur, decay){
+    const c = this.ctx, n = Math.max(1, Math.floor(c.sampleRate*dur));
+    const b = c.createBuffer(2, n, c.sampleRate);
+    for(let ch=0; ch<2; ch++){
+      const d = b.getChannelData(ch);
+      for(let i=0;i<n;i++){
+        const t = i/n;
+        d[i] = (Math.random()*2-1) * Math.pow(1-t, decay) * (1 - Math.exp(-i/900));
+      }
+    }
+    return b;
+  },
+  noiseBuf(){
+    if(this._nb) return this._nb;
+    const c = this.ctx, n = Math.floor(c.sampleRate*4);
+    const b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+    for(let i=0;i<n;i++) d[i] = Math.random()*2-1;
+    this._nb = b; return b;
+  },
+  noise(){ const s = this.ctx.createBufferSource(); s.buffer = this.noiseBuf(); s.loop = true; return s; },
+  send(node, wet){
+    node.connect(this.master);
+    if(wet > 0 && this.verb){
+      const g = this.ctx.createGain(); g.gain.value = wet;
+      node.connect(g); g.connect(this.verb);
+    }
+    return node;
+  },
+  /* 通用音量包络：t0 起，attack 到 peak，decay 后归零 */
+  env(t0, peak, attack, decay, hold){
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(peak,0.0002), t0+attack);
+    if(hold) g.gain.setValueAtTime(Math.max(peak,0.0002), t0+hold);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+attack+(hold||0)+decay);
+    return g;
+  },
+  bp(freq, q, t0, to, dur){
+    const f = this.ctx.createBiquadFilter();
+    f.type='bandpass'; f.Q.value = q;
+    f.frequency.setValueAtTime(Math.max(freq,20), t0);
+    if(to) f.frequency.exponentialRampToValueAtTime(Math.max(to,20), t0+dur);
+    return f;
+  },
+  lp(cut, q){ const f=this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=cut; if(q) f.Q.value=q; return f; },
+  hp(cut){ const f=this.ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=cut; return f; },
+  osc(type, freq){ const o=this.ctx.createOscillator(); o.type=type; o.frequency.value=freq; return o; },
+
+  /* 各音源可以随时“过期”：动画被打断后不再出声 */
+  stale(t){ return !this.on || !this.ctx || t < this.ctx.currentTime - 0.02; },
+
+  /* ---------- ① 界面点击 ---------- */
+  click(){
+    if(!this.on || !this.init()) return;
+    const c=this.ctx, t=c.currentTime;
+    const s=this.noise(), f=this.bp(2600,.9,t,1400,.06), g=this.env(t,.16,.004,.055);
+    s.connect(f); f.connect(g); this.send(g,.25); s.start(t); s.stop(t+.1);
+    const o=this.osc('sine',1500), og=this.env(t,.09,.003,.07);
+    o.frequency.exponentialRampToValueAtTime(700,t+.07);
+    o.connect(og); this.send(og,.2); o.start(t); o.stop(t+.1);
+  },
+
+  /* ---------- ② 蓄势：低频渐强 ---------- */
+  charge(dur){
+    dur = dur || 0.85;
+    if(!this.on || !this.init()) return;
+    const c=this.ctx, t=c.currentTime;
+    const o=this.osc('sine',44), og=this.ctx.createGain();
+    og.gain.setValueAtTime(0.0001,t);
+    og.gain.linearRampToValueAtTime(0.34,t+dur*0.85);
+    og.gain.exponentialRampToValueAtTime(0.0001,t+dur+0.35);
+    const lfo=this.osc('sine',5.5), lg=this.ctx.createGain(); lg.gain.value=3.2;
+    lfo.connect(lg); lg.connect(o.frequency);
+    o.connect(og); this.send(og,.18); o.start(t); o.stop(t+dur+0.4);
+    lfo.start(t); lfo.stop(t+dur+0.4);
+
+    const s=this.noise(), f=this.lp(180,3), fg=this.ctx.createGain();
+    f.frequency.setValueAtTime(120,t); f.frequency.exponentialRampToValueAtTime(1100,t+dur);
+    fg.gain.setValueAtTime(0.0001,t);
+    fg.gain.linearRampToValueAtTime(0.22,t+dur*0.9);
+    fg.gain.exponentialRampToValueAtTime(0.0001,t+dur+0.3);
+    s.connect(f); f.connect(fg); this.send(fg,.3); s.start(t); s.stop(t+dur+0.35);
+
+    const up=this.osc('triangle',90), ug=this.ctx.createGain();
+    up.frequency.exponentialRampToValueAtTime(300,t+dur);
+    ug.gain.setValueAtTime(0.0001,t);
+    ug.gain.linearRampToValueAtTime(0.055,t+dur*0.9);
+    ug.gain.exponentialRampToValueAtTime(0.0001,t+dur+0.25);
+    up.connect(ug); this.send(ug,.45); up.start(t); up.stop(t+dur+0.3);
+  },
+
+  /* ---------- ③ 白光冲刷 ---------- */
+  wash(dur){
+    dur = dur || 0.95;
+    if(!this.on || !this.init()) return;
+    const c=this.ctx, t=c.currentTime;
+    const s=this.noise(), f=this.bp(320,1.0,t,5200,dur*0.72), g=this.env(t,.30,.26,dur*0.55,.04);
+    s.connect(f); f.connect(g); this.send(g,.55); s.start(t); s.stop(t+dur+.4);
+
+    const s2=this.noise(), f2=this.hp(2600), g2=this.ctx.createGain();
+    g2.gain.setValueAtTime(0.0001,t);
+    g2.gain.linearRampToValueAtTime(0.10,t+dur*0.5);
+    g2.gain.exponentialRampToValueAtTime(0.0001,t+dur+0.5);
+    s2.connect(f2); f2.connect(g2); this.send(g2,.7); s2.start(t); s2.stop(t+dur+.55);
+
+    const o=this.osc('sine',1500), og=this.ctx.createGain();
+    o.frequency.exponentialRampToValueAtTime(4200,t+dur*0.7);
+    og.gain.setValueAtTime(0.0001,t);
+    og.gain.linearRampToValueAtTime(0.045,t+dur*0.5);
+    og.gain.exponentialRampToValueAtTime(0.0001,t+dur+0.3);
+    o.connect(og); this.send(og,.6); o.start(t); o.stop(t+dur+.35);
+  },
+
+  /* ---------- ④ 云涡流转 ---------- */
+  vortex(dur){
+    dur = dur || 1.05;
+    if(!this.on || !this.init()) return;
+    const c=this.ctx, t=c.currentTime;
+    const s=this.noise(), f=this.lp(750,1.6), g=this.ctx.createGain();
+    const lfo=this.osc('sine',.68), lg=this.ctx.createGain(); lg.gain.value=420;
+    lfo.connect(lg); lg.connect(f.frequency);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(0.26,t+dur*.3);
+    g.gain.linearRampToValueAtTime(0.0001,t+dur+.45);
+    s.connect(f); f.connect(g); this.send(g,.5); s.start(t); s.stop(t+dur+.5);
+    lfo.start(t); lfo.stop(t+dur+.5);
+
+    const r=this.osc('sine',58), rg=this.ctx.createGain();
+    r.frequency.exponentialRampToValueAtTime(40,t+dur);
+    rg.gain.setValueAtTime(0.0001,t);
+    rg.gain.linearRampToValueAtTime(0.30,t+dur*.35);
+    rg.gain.exponentialRampToValueAtTime(0.0001,t+dur+.4);
+    r.connect(rg); this.send(rg,.25); r.start(t); r.stop(t+dur+.45);
+
+    const s3=this.noise(), f3=this.bp(420,1.7,t,1900,dur), g3=this.env(t,.16,.3,dur*.5,0);
+    s3.connect(f3); f3.connect(g3); this.send(g3,.65); s3.start(t); s3.stop(t+dur+.3);
+  },
+
+  /* ---------- ⑤ 流星「咻」 ---------- */
+  meteor(i){
+    if(!this.on || !this.init()) return;
+    const c=this.ctx, t=c.currentTime;
+    const v = (i||0) % 5;
+    const f0 = 4600 + v*260, f1 = 380 + v*40;
+    const s=this.noise(), f=this.bp(f0,3.2,t,f1,.34), g=this.env(t,.19,.035,.36,.02);
+    s.connect(f); f.connect(g); this.send(g,.7); s.start(t); s.stop(t+.75);
+
+    const s2=this.noise(), f2=this.bp(f0*0.6,1.1,t,f1*0.5,.4), g2=this.env(t,.10,.06,.42,0);
+    s2.connect(f2); f2.connect(g2); this.send(g2,.85); s2.start(t); s2.stop(t+.8);
+  },
+
+  /* ---------- ⑥ 星光铃（FM 钟） ---------- */
+  sparkle(freq, vol, len){
+    if(!this.on || !this.init()) return;
+    const c=this.ctx, t=c.currentTime;
+    const f = freq || 2400, dur = len || 1.5;
+    const car=this.osc('sine',f), mod=this.osc('sine',f*2.76);
+    const mi=this.ctx.createGain();
+    mi.gain.setValueAtTime(f*2.1,t);
+    mi.gain.exponentialRampToValueAtTime(f*0.05,t+dur*0.35);
+    mod.connect(mi); mi.connect(car.frequency);
+    const g=this.env(t,(vol==null?0.075:vol),0.004,dur,0);
+    car.connect(g); this.send(g,.85);
+    car.start(t); car.stop(t+dur+.2); mod.start(t); mod.stop(t+dur+.2);
+    /* 铃芯的高频击打 */
+    const s=this.noise(), f2=this.hp(5200), g2=this.env(t,.028,.003,.09);
+    s.connect(f2); f2.connect(g2); this.send(g2,.5); s.start(t); s.stop(t+.15);
+  },
+
+  /* ---------- ⑦ 爆发冲击 ---------- */
+  burst(heavy){
+    if(!this.on || !this.init()) return;
+    const c=this.ctx, t=c.currentTime;
+    const o=this.osc('sine', heavy?118:96), og=this.ctx.createGain();
+    o.frequency.exponentialRampToValueAtTime(30,t+.62);
+    og.gain.setValueAtTime(heavy?0.62:0.40,t);
+    og.gain.exponentialRampToValueAtTime(0.0001,t+.85);
+    o.connect(og); this.send(og,.22); o.start(t); o.stop(t+.9);
+
+    const s=this.noise(), f=this.lp(heavy?6800:4600,1.1), g=this.env(t,heavy?0.46:0.30,.008,.6,0);
+    s.connect(f); f.connect(g); this.send(g,.55); s.start(t); s.stop(t+.75);
+
+    const up=this.osc('sine',190), ug=this.ctx.createGain();
+    up.frequency.exponentialRampToValueAtTime(2100,t+.34);
+    ug.gain.setValueAtTime(0.0001,t);
+    ug.gain.linearRampToValueAtTime(0.11,t+.12);
+    ug.gain.exponentialRampToValueAtTime(0.0001,t+.55);
+    up.connect(ug); this.send(ug,.5); up.start(t); up.stop(t+.6);
+  },
+
+  /* ---------- ⑧ 光柱升起 ---------- */
+  pillar(dur){
+    dur = dur || 1.25;
+    if(!this.on || !this.init()) return;
+    const c=this.ctx, t=c.currentTime;
+    const s=this.noise(), f=this.bp(460,1.3,t,4200,dur), g=this.env(t,.24,.35,dur*.55,.05);
+    s.connect(f); f.connect(g); this.send(g,.75); s.start(t); s.stop(t+dur+.5);
+    const r=this.osc('sine',64), rg=this.ctx.createGain();
+    rg.gain.setValueAtTime(.0001,t);
+    rg.gain.linearRampToValueAtTime(0.22,t+dur*.4);
+    rg.gain.exponentialRampToValueAtTime(.0001,t+dur+.4);
+    r.connect(rg); this.send(rg,.3); r.start(t); r.stop(t+dur+.45);
+  },
+
+  /* ---------- ⑨ 揭示重击 ---------- */
+  reveal(rar){
+    if(!this.on || !this.init()) return;
+    const c=this.ctx, t=c.currentTime;
+    const o=this.osc('sine',142), og=this.ctx.createGain();
+    o.frequency.exponentialRampToValueAtTime(27,t+.7);
+    og.gain.setValueAtTime(0.72,t);
+    og.gain.exponentialRampToValueAtTime(0.0001,t+1.0);
+    o.connect(og); this.send(og,.24); o.start(t); o.stop(t+1.05);
+
+    const s=this.noise(), f=this.lp(7800,1.0), g=this.env(t,0.52,.006,.72,0);
+    s.connect(f); f.connect(g); this.send(g,.6); s.start(t); s.stop(t+.9);
+
+    const s2=this.noise(), f2=this.hp(3000), g2=this.env(t,0.24,.01,.5,0);
+    s2.connect(f2); f2.connect(g2); this.send(g2,.8); s2.start(t); s2.stop(t+.65);
+
+    /* 上行琶音（五声音阶），稀有度越高越长 */
+    const base = 523.25;
+    const scale = rar===5 ? [0,2,4,7,9,12,14,16,19] : rar===4 ? [0,2,4,7,9,12] : [0,4,7];
+    scale.forEach((semi,i)=>{
+      const fr = base*Math.pow(2, semi/12);
+      const d = 0.05 + i*0.055;
+      const tt = t + d;
+      const oc=this.osc(rar===5?'triangle':'sine', fr);
+      const gg=this.env(tt, rar===5?0.13:0.10, 0.006, rar===5?1.9:1.1, 0);
+      oc.connect(gg); this.send(gg,.9); oc.start(tt); oc.stop(tt+2.3);
+    });
+  },
+
+  /* ---------- ⑩ 卡片成立铃声 ---------- */
+  chime(rarity){
+    if(!this.on || !this.init()) return;
+    const t0 = this.ctx.currentTime + 0.02;
+    const seq = rarity===5?[523.25,659.25,783.99,1046.5,1318.5,1568,2093]
+              : rarity===4?[523.25,659.25,783.99,1046.5]:[392,523.25];
+    seq.forEach((fr,i)=>{
+      const t=t0+i*0.08;
+      const o=this.osc(rarity===5?'triangle':'sine', fr);
+      const g=this.env(t, rarity===5?0.15:0.10, 0.008, rarity===5?1.6:0.85, 0);
+      o.connect(g); this.send(g,.9); o.start(t); o.stop(t+2.2);
+    });
+    if(rarity===5){
+      const s=this.noise(), f=this.hp(2600), g=this.ctx.createGain();
+      g.gain.setValueAtTime(0.001,t0); g.gain.linearRampToValueAtTime(0.08,t0+0.35);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+1.9);
+      s.connect(f); f.connect(g); this.send(g,.8); s.start(t0); s.stop(t0+1.95);
+    }
+  },
+
+  /* ---------- ⑪ 余韵（稀疏铃声） ---------- */
+  settle(rar){
+    if(!this.on || !this.init()) return;
+    const n = rar===5?7:rar===4?5:3;
+    for(let i=0;i<n;i++){
+      const d = 0.12 + i*0.29 + Math.random()*0.1;
+      setTimeout(()=>{ if(this.on) this.sparkle(1500+Math.random()*2600, 0.05, 1.4); }, d*1000);
+    }
+  },
+
+  /* ---------- ⑫ 持续氛围垫（模拟视频里的音乐床） ---------- */
+  padOn(){
+    if(!this.on || !this.init() || this._pad) return;
+    const c=this.ctx, t=c.currentTime;
+    const out=this.ctx.createGain(); out.gain.setValueAtTime(0.0001,t);
+    out.gain.linearRampToValueAtTime(0.075,t+1.4);
+    const flt=this.lp(760,0.9); flt.connect(out);
+    /* A 大三和弦 + 九度，柔和三角波，慢速失谐 */
+    [110, 164.81, 220, 277.18, 329.63, 440].forEach((f,i)=>{
+      const o=this.osc('triangle', f*(1+(i%2?0.0018:-0.0018)));
+      const g=this.ctx.createGain(); g.gain.value = i>3?0.30:0.52;
+      o.connect(g); g.connect(flt); o.start(t);
+      const lfo=this.osc('sine',0.09+i*0.031), lg=this.ctx.createGain(); lg.gain.value=0.16;
+      lfo.connect(lg); lg.connect(g.gain); lfo.start(t);
+      (this._padOsc||(this._padOsc=[])).push(o,lfo);
+    });
+    const trem=this.osc('sine',0.24), tg=this.ctx.createGain(); tg.gain.value=0.028;
+    trem.connect(tg); tg.connect(out.gain); trem.start(t);
+    this._padOsc.push(trem);
+    this.send(out,.85);
+    this._pad = out;
+  },
+  padOff(fade){
+    if(!this._pad) return;
+    const c=this.ctx, t=c.currentTime, f=fade||1.1;
+    const g=this._pad;
+    try{ g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(g.gain.value,0.0001),t);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+f); }catch(e){}
+    const oscs=this._padOsc||[]; 
+    setTimeout(()=>{ oscs.forEach(o=>{ try{o.stop();}catch(e){} }); this._padOsc=[]; }, (f+0.25)*1000);
+    this._pad = null;
+  }
+};
+
+/* =========================================================
+   5. 自定义壁纸（静态图片 / 动态视频 / 实时相机）
+   ========================================================= */
+const WALL_DEFAULT = { src:'default', name:'', kind:'image', fit:'cover', blur:0, dim:46, vig:true, kb:false };
+
+const WALL = {
+  db:null, objUrl:null, liveStream:null, camStream:null, camFacing:'user', camOk:false,
+
+  /* ---------- IndexedDB（壁纸二进制放这里，localStorage 装不下） ---------- */
+  open(){
+    return new Promise(res=>{
+      if(this.db) return res(this.db);
+      let rq;
+      try{ rq = indexedDB.open('wishsim-wall', 1); }catch(e){ return res(null); }
+      rq.onupgradeneeded = ()=>{ const d = rq.result; if(!d.objectStoreNames.contains('wall')) d.createObjectStore('wall'); };
+      rq.onsuccess = ()=>{ this.db = rq.result; res(this.db); };
+      rq.onerror = ()=>res(null);
+    });
+  },
+  async put(key, val){
+    const db = await this.open(); if(!db) return false;
+    return new Promise(res=>{
+      try{
+        const tx = db.transaction('wall','readwrite');
+        tx.objectStore('wall').put(val, key);
+        tx.oncomplete = ()=>res(true); tx.onerror = ()=>res(false);
+      }catch(e){ res(false); }
+    });
+  },
+  async get(key){
+    const db = await this.open(); if(!db) return null;
+    return new Promise(res=>{
+      try{
+        const tx = db.transaction('wall','readonly');
+        const rq = tx.objectStore('wall').get(key);
+        rq.onsuccess = ()=>res(rq.result || null); rq.onerror = ()=>res(null);
+      }catch(e){ res(null); }
+    });
+  },
+  async del(key){
+    const db = await this.open(); if(!db) return;
+    try{ db.transaction('wall','readwrite').objectStore('wall').delete(key); }catch(e){}
+  },
+
+  /* ---------- DOM ---------- */
+  el(){ return document.getElementById('wallLayer'); },
+  img(){ return document.getElementById('wallImg'); },
+  vid(){ return document.getElementById('wallVid'); },
+
+  /* ---------- 启动 ---------- */
+  async boot(){
+    this.paint();
+    if(state.wall.src !== 'custom') return;
+    if(state.wall.kind === 'camera'){        // 实时相机无法跨会话保留
+      state.wall = Object.assign({}, WALL_DEFAULT);
+      this.paint(); return;
+    }
+    const rec = await this.get('current');
+    if(rec && rec.blob){ this.attach(rec.blob, rec.kind); this.objUrl && this.paint(); }
+    else { state.wall = Object.assign({}, WALL_DEFAULT); this.paint(); }
+  },
+
+  /* ---------- 套用资源 ---------- */
+  attach(blob, kind){
+    const L = this.el(); if(!L) return;
+    this.stopLive();
+    if(this.objUrl){ try{ URL.revokeObjectURL(this.objUrl); }catch(e){} this.objUrl = null; }
+    if(!blob){ this.img().removeAttribute('src'); this.vid().removeAttribute('src'); this.paint(); return; }
+    this.objUrl = URL.createObjectURL(blob);
+    if(kind === 'video'){
+      const v = this.vid(); v.src = this.objUrl; v.loop = true; v.muted = true;
+      L.classList.add('video'); v.play().catch(()=>{});
+    } else {
+      this.img().src = this.objUrl; L.classList.remove('video');
+    }
+    this.paint();
+  },
+
+  /* ---------- 渲染当前配置 ---------- */
+  paint(){
+    const L = this.el(); if(!L) return;
+    const w = state.wall;
+    const custom = w.src === 'custom' && (!!this.objUrl || !!this.liveStream);
+    document.body.classList.toggle('has-wall', custom);
+    L.classList.toggle('video', w.kind === 'video' || (w.kind === 'camera' && !!this.liveStream));
+    L.classList.toggle('contain', w.fit === 'contain');
+    L.classList.toggle('kb', !!w.kb && w.kind === 'image');
+    L.classList.toggle('vig', !!w.vig);
+    const veil = document.getElementById('wallVeil');
+    if(veil) veil.style.background = 'rgba(4,8,18,' + ((w.dim||0)/100) + ')';
+    /* 注意：filter 简写只接受滤镜函数，scale() 属于 transform —— 必须分开写，
+       否则整条声明非法，会被浏览器静默丢弃（模糊就完全不生效）。 */
+    const f  = w.blur ? 'blur(' + w.blur + 'px)' : '';
+    const sc = w.blur ? 'scale(1.07)' : '';   // 放大一点，避免模糊后边缘露白
+    this.img().style.filter = f;  this.img().style.transform = sc;
+    this.vid().style.filter = f;  this.vid().style.transform = sc;
+    if(w.kind === 'camera' && this.liveStream){
+      const v = this.vid();
+      if(v.srcObject !== this.liveStream){ v.srcObject = this.liveStream; v.play().catch(()=>{}); }
+    }
+  },
+
+  /* ---------- 从相册 / 文件 ---------- */
+  pick(kind){
+    const inp = document.getElementById(kind === 'album' ? 'wallFile' : 'wallCam');
+    if(!inp) return;
+    inp.value = '';
+    inp.click();
+  },
+  async useFile(file){
+    if(!file) return;
+    const type = (file.type || '').toLowerCase();
+    let isVid = type.startsWith('video');
+    if(!type && /\.(mp4|webm|mov|m4v|ogv)$/i.test(file.name||'')) isVid = true;
+    if(!type && /\.(gif)$/i.test(file.name||'')) isVid = false;   // GIF 交给 <img> 自己动
+    if(file.size > 120*1024*1024){ toast('文件过大（超过 120MB），请换一个小一些的'); return; }
+    await this.commit(file, isVid ? 'video' : 'image', file.name || '自定义背景');
+  },
+  async commit(blob, kind, name){
+    this.stopLive();
+    state.wall = Object.assign({}, WALL_DEFAULT, state.wall, { src:'custom', kind, name });
+    await this.put('current', { blob, kind, name, t:Date.now() });
+    this.attach(blob, kind);
+    save();
+    if(mTab === 'wall') paintManager();
+  },
+
+  /* ---------- 相机 ---------- */
+  camSupport(){
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  },
+  async camStart(facing){
+    if(!this.camSupport()) return { ok:false, msg:'当前环境不支持相机调用（需要以浏览器打开本地文件，或使用 https 访问）' };
+    this.camStop();
+    try{
+      this.camStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing === 'environment' ? {ideal:'environment'} : {ideal:'user'},
+                 width:{ ideal:1920 }, height:{ ideal:1080 } },
+        audio: false
+      });
+      this.camFacing = facing || 'user';
+      this.camOk = true;
+      return { ok:true };
+    }catch(e){
+      const n = (e && e.name) || '';
+      const msg = n === 'NotAllowedError' || n === 'SecurityError' ? '相机权限被拒绝或不可用。请在浏览器地址栏的权限设置里允许摄像头，或改用「从相册选择」。'
+                : n === 'NotFoundError' || n === 'DevicesNotFoundError' ? '没有检测到可用的摄像头。'
+                : n === 'NotReadableError' ? '摄像头被其他程序占用，请关闭后重试。'
+                : ('相机启动失败：' + (n || (e && e.message) || '未知错误'));
+      return { ok:false, msg };
+    }
+  },
+  camStop(){
+    if(this.camStream){ this.camStream.getTracks().forEach(t=>{ try{t.stop();}catch(e){} }); this.camStream = null; }
+    this.camOk = false;
+  },
+  stopLive(){
+    if(this.liveStream){
+      this.liveStream.getTracks().forEach(t=>{ try{t.stop();}catch(e){} });
+      this.liveStream = null;
+      const v = this.vid(); if(v) v.srcObject = null;
+    }
+  },
+  async camShot(srcId){
+    const v = document.getElementById(srcId || 'camPrev');
+    if(!v || !v.videoWidth) return null;
+    const W = v.videoWidth, H = v.videoHeight;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const g = cv.getContext('2d');
+    if(this.camFacing === 'user'){ g.translate(W,0); g.scale(-1,1); }
+    g.drawImage(v,0,0,W,H);
+    return await new Promise(res=> cv.toBlob(b=>res(b), 'image/jpeg', 0.92));
+  },
+  async camToWall(){
+    if(!this.camStream){ const r = await this.camStart(this.camFacing); if(!r.ok){ toast(r.msg); return; } }
+    this.stopLive();
+    this.liveStream = this.camStream; this.camStream = null;
+    state.wall = Object.assign({}, WALL_DEFAULT, state.wall, { src:'custom', kind:'camera', name:'实时相机画面' });
+    const v = this.vid();
+    v.srcObject = this.liveStream; v.muted = true; v.play().catch(()=>{});
+    this.el().classList.add('video');
+    this.paint(); save();
+    toast('已使用相机实时画面作为动态壁纸（仅本次会话有效）');
+  },
+
+  /* ---------- 重置 ---------- */
+  async reset(){
+    this.stopLive();
+    state.wall = Object.assign({}, WALL_DEFAULT);
+    await this.del('current');
+    this.attach(null);
+    save();
+    if(mTab === 'wall') paintManager();
+  }
+};
+
+/* =========================================================
+   5b. 「祈愿」按钮皮肤（相册 / 相机图片替代横幅外观）
+   二进制复用 WALL 的 IndexedDB（同一个库里换 key），元信息存 state.btn.skin
+   ========================================================= */
+const BSKIN = {
+  objUrl:null, native:{ w:0, h:0 },
+
+  el(){  return document.getElementById('btnSkin'); },
+  btn(){ return document.getElementById('p1'); },
+
+  /* ---------- 启动：读取存档里的皮肤 ---------- */
+  async boot(){
+    this.apply();
+    if(!state.btn.skin.on) return;
+    const rec = await WALL.get('btnskin');
+    if(rec && rec.blob){ this.attach(rec.blob); }
+    else { state.btn.skin.on = false; state.btn.skin.name = ''; this.apply(); }
+  },
+
+  /* ---------- 读图片宽高比（判断是不是「整张按钮图」） ---------- */
+  aspectOf(blob){
+    return new Promise(res=>{
+      let url = '';
+      try{ url = URL.createObjectURL(blob); }catch(e){ return res(0); }
+      const im  = new Image();
+      const end = a => { try{ URL.revokeObjectURL(url); }catch(e){} res(a); };
+      im.onload  = ()=> end(im.naturalHeight ? im.naturalWidth / im.naturalHeight : 0);
+      im.onerror = ()=> end(0);
+      im.src = url;
+    });
+  },
+
+  /* ---------- 套用图片 ---------- */
+  attach(blob){
+    const im = this.el(); if(!im) return;
+    if(this.objUrl){ try{ URL.revokeObjectURL(this.objUrl); }catch(e){} this.objUrl = null; }
+    this.native = { w:0, h:0 };
+    if(!blob){ im.onload = null; im.onerror = null; im.removeAttribute('src'); return; }
+    this.objUrl = URL.createObjectURL(blob);
+    im.onload  = ()=>{ this.native = { w:im.naturalWidth || 0, h:im.naturalHeight || 0 }; this.applyRatio(); };
+    /* 图片损坏 / 格式不支持时自动退回默认皮肤，别让按钮变成一块空白 */
+    im.onerror = async ()=>{ await this.reset(); toast('这张图片无法读取，已换成默认皮肤'); };
+    im.src = this.objUrl;
+  },
+
+  async useFile(file){
+    if(!file) return;
+    if(!(file.type || '').startsWith('image')){ toast('按钮皮肤目前只支持图片'); return; }
+    if(file.size > 24*1024*1024){ toast('图片过大（超过 24MB），请换一张小一些的'); return; }
+    await this.commit(file, file.name || '自定义皮肤');
+  },
+
+  async commit(blob, name){
+    state.btn.skin.on   = true;
+    state.btn.skin.name = name || '自定义皮肤';
+    /* 宽横幅图（≥2.2:1）多半就是一张「整张按钮图」，自带文字与图案：
+       这时再叠上我们的文字和小角色就是重影，自动关掉；普通照片则保留叠加。 */
+    const ar = await this.aspectOf(blob);
+    const wide = ar > 0 && ar >= 2.2;
+    if(ar > 0){
+      state.btn.skin.text  = !wide;
+      state.btn.skin.chibi = !wide;
+    }
+    await WALL.put('btnskin', { blob, name: state.btn.skin.name, t:Date.now() });
+    this.attach(blob);
+    this.apply();
+    save();
+    if(mTab === 'btn') this.mountPanel();
+    toast(wide ? '已换上皮肤：图片自带文字，已自动去掉叠加图层' : '已换上自定义按钮皮肤');
+  },
+
+  async reset(){
+    state.btn.skin.on   = false;
+    state.btn.skin.name = '';
+    await WALL.del('btnskin');
+    this.attach(null);
+    this.apply();
+    save();
+    if(mTab === 'btn') this.mountPanel();
+    toast('已恢复默认按钮皮肤');
+  },
+
+  /* ---------- 应用外观（class / CSS 变量） ---------- */
+  apply(){
+    const b = this.btn(); if(!b) return;
+    const s = state.btn.skin;
+    b.classList.toggle('skinned', !!s.on);
+    b.classList.toggle('notext',  !!s.on && !s.text);
+    b.classList.toggle('nochibi', !!s.on && !s.chibi);
+    b.style.setProperty('--sko', String(Math.max(0, Math.min(70, s.dim||0)) / 100));
+    b.style.setProperty('--skr', Math.round(Math.max(0, Math.min(30, s.radius||0))) + 'px');
+    const im = this.el();
+    if(im) im.classList.toggle('fitcontain', s.fit === 'contain');
+    this.applyRatio();
+  },
+
+  /* ---------- 贴合图片比例：调 --hr 让按钮高度匹配图片宽高比 ----------
+     按钮基础比例 = --w0/--h0（约 4.21:1）远宽于普通照片，
+     所以 hr = 4.21 / aspect；夹在 [0.72, 1.9] 以内，避免按钮高过视口。 */
+  applyRatio(){
+    const b = this.btn(); if(!b) return;
+    const s = state.btn.skin;
+    if(!(s.on && s.ratio && this.native.h > 0)){
+      b.style.removeProperty('--hr');
+      syncWishLayout();
+      return;
+    }
+    const cs   = getComputedStyle(b);
+    const h0   = parseFloat(cs.getPropertyValue('--h0')) || 96;
+    const wNow = b.getBoundingClientRect().width || 1;
+    const aspect = this.native.w / this.native.h;
+    const hr = Math.max(0.72, Math.min(1.9, wNow / (aspect * h0 * (state.btn.scale || 1))));
+    b.style.setProperty('--hr', String(Math.round(hr * 1000) / 1000));
+    syncWishLayout();
+  },
+
+  /* ---------- 从相册 / 系统相机 ---------- */
+  pick(kind){
+    const inp = document.getElementById(kind === 'camera' ? 'skinCam' : 'skinFile');
+    if(!inp) return;
+    inp.value = '';
+    inp.click();
+  },
+
+  /* ---------- 相机实时预览 ---------- */
+  async renderCamBox(){
+    const box = document.getElementById('skinCamBox');
+    if(!box) return;
+    box.innerHTML = `
+      <div class="tline">相机实时预览</div>
+      <div class="camwrap">
+        <video id="skinCamPrev" autoplay muted playsinline style="--mir:${WALL.camFacing==='user'?-1:1}"></video>
+        <div class="cmsg" id="skinCamMsg">正在请求相机权限…</div>
+      </div>
+      <div class="camrow">
+        <button class="mini" id="skinCamShot">拍照设为皮肤</button>
+        <button class="mini ghost" id="skinCamFlip">切换前后摄像头</button>
+        <button class="mini ghost" id="skinCamOff">关闭相机</button>
+      </div>
+      <div class="hint" style="margin-top:10px">浏览器若不允许调用相机，可改用「从相册选择」，或点上面的按钮调起系统相机拍照。</div>`;
+    const v   = document.getElementById('skinCamPrev');
+    const msg = document.getElementById('skinCamMsg');
+    const r   = await WALL.camStart(WALL.camFacing);
+    const cmsg = document.getElementById('skinCamMsg');
+    if(!r.ok){
+      if(cmsg) cmsg.textContent = r.msg;
+      if(v) v.style.display = 'none';
+    } else {
+      if(cmsg) cmsg.remove();
+      v.srcObject = WALL.camStream;
+      v.style.setProperty('--mir', WALL.camFacing === 'user' ? -1 : 1);
+      v.play().catch(()=>{});
+    }
+    const g = id => document.getElementById(id);
+    if(g('skinCamShot')) g('skinCamShot').onclick = async ()=>{
+      SFX.click();
+      const blob = await WALL.camShot('skinCamPrev');
+      if(!blob){ toast('拍照失败，请稍后重试'); return; }
+      await this.commit(blob, '相机拍摄');
+    };
+    if(g('skinCamFlip')) g('skinCamFlip').onclick = async ()=>{
+      WALL.camFacing = WALL.camFacing === 'user' ? 'environment' : 'user';
+      await this.renderCamBox();
+    };
+    if(g('skinCamOff')) g('skinCamOff').onclick = ()=>this.camOff();
+  },
+  camOff(){
+    WALL.camStop();
+    const box = document.getElementById('skinCamBox');
+    if(box) box.innerHTML = '';
+  },
+
+  /* ---------- 面板里的预览 ---------- */
+  mountPanel(){
+    const prev = document.getElementById('skprev');
+    if(prev){
+      prev.innerHTML = '';
+      if(state.btn.skin.on && this.objUrl){
+        const im = document.createElement('img');
+        im.src = this.objUrl;
+        im.style.objectFit = state.btn.skin.fit === 'contain' ? 'contain' : 'cover';
+        im.style.borderRadius = Math.round(state.btn.skin.radius || 0) + 'px';
+        prev.appendChild(im);
+        const veil = document.createElement('div');
+        veil.style.cssText = 'position:absolute;inset:0;background:rgba(5,8,15,' +
+          ((state.btn.skin.dim || 0) / 100) + ');border-radius:' + Math.round(state.btn.skin.radius || 0) + 'px';
+        prev.appendChild(veil);
+      } else {
+        const ph = document.createElement('div');
+        ph.className = 'ph';
+        ph.textContent = '默认皮肤（薄荷奶绿横幅）';
+        prev.appendChild(ph);
+      }
+    }
+    const cur = document.getElementById('skCur');
+    if(cur) cur.textContent = state.btn.skin.on ? (state.btn.skin.name || '自定义皮肤') : '默认（薄荷奶绿横幅）';
+  }
+};
+
+/* =========================================================
+   6. 抽卡演出（对齐祈愿动画：蓄势 → 白光 → 云涡 → 流星 → 光柱 → 揭示）
+   ========================================================= */
+const FX = {
+  layer:null, canvas:null, ctx:null, W:0, H:0, dpr:1,
+  parts:[], rings:[], clouds:[], sea:[], sparks:[], meteors:[],
+  phase:'idle', pt:0, t0:0, rarity:3, shake:0, raf:0, resolve:null, done:false, jumping:false,
+  cloudSprite:null, skySprite:null, starSprite:null,
+  skyMix:0, burstX:0, burstY:0, burstPlaced:false,
+  cues:[], cueIdx:0, total:0,
+
+  /* 各阶段时长（秒）——对齐参考视频的音画时间轴 */
+  /* 各段时长（秒）——按参考视频逐帧测得的节拍对齐：
+     蓄势 0.8 / 白光 0.6 / 云涡 0.6 / 流星 3.2 / 爆发 1.7 / 云海光柱 1.1，合计 8.0s */
+  PH: { charge:0.80, wash:0.60, vortex:0.60, meteor:3.20, burst:1.70, pillar:1.10, reveal:0.70 },
+
+  init(){
+    this.layer  = document.getElementById('fxLayer');
+    this.canvas = document.getElementById('fxCanvas');
+    this.ctx    = this.canvas.getContext('2d');
+    this.cloudSprite = this.makeCloud();
+    this.skySprite   = this.makeSky();
+    this.starSprite  = this.makeStars();
+    this.resize();
+    window.addEventListener('resize', ()=>this.resize());
+  },
+  resize(){
+    if(!this.canvas) return;
+    this.dpr = Math.min(window.devicePixelRatio||1, 2);
+    this.W = window.innerWidth; this.H = window.innerHeight;
+    this.canvas.width  = Math.max(1, Math.floor(this.W*this.dpr));
+    this.canvas.height = Math.max(1, Math.floor(this.H*this.dpr));
+    this.ctx.setTransform(this.dpr,0,0,this.dpr,0,0);
+  },
+
+  /* ================= 预渲染素材 ================= */
+  makeCloud(){
+    const S = 256;
+    const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    const c = cv.getContext('2d');
+    c.globalCompositeOperation = 'lighter';
+    for(let i=0;i<17;i++){
+      const a = Math.random()*6.283, d = Math.pow(Math.random(),0.7)*S*0.20;
+      const x = S/2 + Math.cos(a)*d, y = S/2 + Math.sin(a)*d*0.86;
+      const r = S*(0.12 + Math.random()*0.17);
+      const g = c.createRadialGradient(x,y,0,x,y,r);
+      g.addColorStop(0,   'rgba(255,255,255,0.50)');
+      g.addColorStop(0.42,'rgba(238,246,255,0.26)');
+      g.addColorStop(0.74,'rgba(196,222,255,0.09)');
+      g.addColorStop(1,   'rgba(160,196,255,0)');
+      c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle = g; c.fill();
+    }
+    c.globalCompositeOperation = 'destination-in';
+    const m = c.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+    m.addColorStop(0,   'rgba(0,0,0,1)');
+    m.addColorStop(0.58,'rgba(0,0,0,0.86)');
+    m.addColorStop(0.86,'rgba(0,0,0,0.30)');
+    m.addColorStop(1,   'rgba(0,0,0,0)');
+    c.fillStyle = m; c.fillRect(0,0,S,S);
+    return cv;
+  },
+  makeSky(){
+    const W = 1440, H = 900;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const c = cv.getContext('2d');
+    const g = c.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,    'rgb(13,44,98)');
+    g.addColorStop(0.30, 'rgb(30,82,154)');
+    g.addColorStop(0.56, 'rgb(78,140,202)');
+    g.addColorStop(0.74, 'rgb(162,202,236)');
+    g.addColorStop(0.86, 'rgb(216,234,248)');
+    g.addColorStop(1,    'rgb(236,245,253)');
+    c.fillStyle = g; c.fillRect(0,0,W,H);
+    return cv;
+  },
+  makeStars(){
+    const W = 1440, H = 900;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const c = cv.getContext('2d');
+    for(let i=0;i<330;i++){
+      const x = Math.random()*W;
+      const y = Math.pow(Math.random(), 1.45)*H*0.72;
+      const r = Math.random()*1.45 + 0.25;
+      const a = Math.random()*0.72 + 0.16;
+      c.beginPath(); c.arc(x,y,r,0,7);
+      c.fillStyle = 'rgba(' + (i%7===0 ? '255,232,190' : '222,238,255') + ',' + a + ')';
+      c.fill();
+    }
+    for(let i=0;i<16;i++){
+      const x = Math.random()*W, y = Math.pow(Math.random(),1.3)*H*0.6;
+      const r = Math.random()*2.2 + 1.5;
+      const g = c.createRadialGradient(x,y,0,x,y,r*5);
+      g.addColorStop(0,'rgba(255,255,255,.85)');
+      g.addColorStop(.3,'rgba(200,225,255,.35)');
+      g.addColorStop(1,'rgba(180,210,255,0)');
+      c.beginPath(); c.arc(x,y,r*5,0,7); c.fillStyle = g; c.fill();
+    }
+    return cv;
+  },
+
+  /* ================= 云 ================= */
+  genVortexClouds(){
+    const m = Math.min(this.W,this.H);
+    this.clouds = [];
+    for(let i=0;i<158;i++){
+      this.clouds.push({
+        a0: Math.random()*6.283,
+        r0: m * (0.10 + Math.pow(Math.random(),0.55)*1.85),
+        sz: m * (0.30 + Math.random()*0.52),
+        al: 0.15 + Math.random()*0.24,
+        sp: 0.55 + Math.random()*0.85
+      });
+    }
+  },
+  genSeaClouds(){
+    const m = Math.min(this.W,this.H), W = this.W, H = this.H;
+    this.sea = [];
+    for(let i=0;i<132;i++){
+      const d = Math.pow(Math.random(), 0.65);
+      this.sea.push({
+        x: (Math.random()*1.5 - 0.25) * W,
+        y: H*(0.748 + d*0.27),
+        sz: m * (0.13 + d*0.50),
+        al: 0.18 + d*0.44,
+        sp: 0.006 + Math.random()*0.016,
+        ph: Math.random()*6.283
+      });
+    }
+  },
+  drawSeaClouds(t, dim){
+    if(!this.sea.length) this.genSeaClouds();
+    const ctx = this.ctx, W = this.W, H = this.H, k = (dim==null?1:dim);
+    if(k <= 0.01) return;
+    const hg = ctx.createLinearGradient(0, H*0.60, 0, H*0.80);
+    hg.addColorStop(0,  'rgba(255,255,255,0)');
+    hg.addColorStop(.66,'rgba(226,240,255,' + (0.24*k) + ')');
+    hg.addColorStop(1,  'rgba(255,255,255,' + (0.50*k) + ')');
+    ctx.fillStyle = hg; ctx.fillRect(0, H*0.60, W, H*0.22);
+    ctx.globalCompositeOperation = 'lighter';
+    for(const c of this.sea){
+      const yy = c.y + Math.sin(t*c.sp + c.ph)*4;
+      ctx.globalAlpha = Math.min(1, c.al*k);
+      ctx.drawImage(this.cloudSprite, c.x - c.sz/2, yy - c.sz/2, c.sz, c.sz);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  },
+
+  /* ================= 天空 ================= */
+  drawSky(mix, extraDark){
+    const ctx = this.ctx, W = this.W, H = this.H;
+    ctx.drawImage(this.skySprite, 0, 0, W, H);
+    const d = 0.85*(1 - Math.max(0, Math.min(1, mix))) + (extraDark||0);
+    if(d > 0.002){
+      ctx.fillStyle = 'rgba(3,8,20,' + Math.min(0.94, d) + ')';
+      ctx.fillRect(0,0,W,H);
+    }
+    const sa = Math.max(0, 1 - mix*0.93);
+    if(sa > 0.012){
+      ctx.save();
+      ctx.globalAlpha = sa;
+      ctx.drawImage(this.starSprite, -W*0.14, -H*0.10, W*1.28, H*1.15);
+      ctx.restore();
+    }
+  },
+
+  /* ================= 四芒星 ================= */
+  star4(x, y, r, a, rot){
+    if(r <= 0 || a <= 0.006) return;
+    const c = this.ctx;
+    c.save();
+    c.translate(x,y); c.rotate(rot||0);
+    c.globalCompositeOperation = 'lighter';
+    const g = c.createRadialGradient(0,0,0,0,0,r*2.2);
+    g.addColorStop(0,  'rgba(255,255,255,' + Math.min(1,a) + ')');
+    g.addColorStop(.24,'rgba(214,236,255,' + (a*0.5) + ')');
+    g.addColorStop(1,  'rgba(160,200,255,0)');
+    c.beginPath(); c.arc(0,0,r*2.2,0,7); c.fillStyle = g; c.fill();
+    /* 细长四芒（八点直边星形，比曲线更锐利） */
+    const L = r*7.0, w = r*0.20;
+    c.beginPath();
+    c.moveTo(0, -L);
+    c.lineTo( w, -L*0.13); c.lineTo( L, 0);  c.lineTo( w,  L*0.13);
+    c.lineTo( 0,  L);
+    c.lineTo(-w,  L*0.13); c.lineTo(-L, 0);  c.lineTo(-w, -L*0.13);
+    c.closePath();
+    c.fillStyle = 'rgba(255,255,255,' + Math.min(1, a*1.25) + ')';
+    c.fill();
+    /* 水平镜头光晕 */
+    const lg = c.createLinearGradient(-L*1.6,0,L*1.6,0);
+    lg.addColorStop(0,  'rgba(190,220,255,0)');
+    lg.addColorStop(.40,'rgba(226,242,255,' + (a*0.30) + ')');
+    lg.addColorStop(.5, 'rgba(255,255,255,' + Math.min(1,a*0.88) + ')');
+    lg.addColorStop(.60,'rgba(226,242,255,' + (a*0.30) + ')');
+    lg.addColorStop(1,  'rgba(190,220,255,0)');
+    c.fillStyle = lg;
+    const hh = Math.max(1.3, r*0.20);
+    c.fillRect(-L*1.6, -hh/2, L*3.2, hh);
+    c.restore();
+    c.globalCompositeOperation = 'source-over';
+  },
+
+  /* ================= 流星 ================= */
+  spawnMeteor(main, bornAt){
+    const W = this.W, H = this.H, m = Math.min(W,H);
+    const mk = o => { o.bornAt = bornAt || 0; o.px = null; o.py = null; o.dead = false; return o; };
+    if(main){
+      /* 主流星：从左上划向右下，与参考视频一致 */
+      this.meteors.push(mk({ x:-W*0.10, y:-H*0.26, dx:0.78, dy:0.63, sp:m*0.74,
+        life:this.PH.meteor*0.96, len:m*1.12, w:1, main:true }));
+    } else {
+      const n = 1 + (Math.random() < 0.5 ? 1 : 0);
+      for(let i=0;i<n;i++){
+        const left = Math.random() < 0.72;
+        this.meteors.push(mk({
+          x: left ? -W*(0.06 + Math.random()*0.26) : W*(0.62 + Math.random()*0.45),
+          y: -H*(0.10 + Math.random()*0.40),
+          dx: left ? 0.78 : -0.78, dy: 0.63,
+          sp: m*(0.62 + Math.random()*0.78),
+          life: 0.80 + Math.random()*0.60, len: m*(0.42 + Math.random()*0.52),
+          w: 0.38 + Math.random()*0.44, main:false }));
+      }
+    }
+  },
+  /* phaseEl：进入流星阶段后经过的秒数（与帧率无关，位置完全由时间轴决定） */
+  meteorStep(phaseEl){
+    const W = this.W, H = this.H;
+    for(const mt of this.meteors){
+      if(mt.dead) continue;
+      const t = phaseEl - mt.bornAt;
+      if(t < 0) continue;
+      mt.t = Math.min(t, mt.life);
+      const d = Math.hypot(mt.dx, mt.dy) || 1;
+      const npx = mt.x + (mt.dx/d)*mt.sp*mt.t;
+      const npy = mt.y + (mt.dy/d)*mt.sp*mt.t;
+      const moved = (mt.px == null) ? 0 : Math.hypot(npx - mt.px, npy - mt.py);
+      mt.px = npx; mt.py = npy;
+      if(!mt.main && t >= mt.life){ mt.dead = true; continue; }
+      if(npy > H*0.84 || npx < -W*0.35){ mt.dead = true; continue; }
+      /* 星点按“行进距离”生成，掉帧也不会变稀 */
+      let k = moved/24;
+      while(k > 0){
+        if(k < 1 && Math.random() > k) break;
+        const f = Math.random();
+        this.sparks.push({
+          x: npx - (mt.dx/d)*mt.len*f + (Math.random()-0.5)*mt.len*0.16,
+          y: npy - (mt.dy/d)*mt.len*f + (Math.random()-0.5)*mt.len*0.14,
+          r: (mt.main ? 2.0 : 1.3) + Math.random()*2.0,
+          life: 1, dec: 0.22 + Math.random()*0.40,
+          rot: Math.random()*6.283, vr: (Math.random()-0.5)*0.03,
+          vx: (Math.random()-0.5)*10, vy: -6 - Math.random()*12
+        });
+        k -= 1;
+      }
+    }
+    this.meteors = this.meteors.filter(mt => !mt.dead || mt.main);
+  },
+  drawMeteors(){
+    const c = this.ctx;
+    for(const mt of this.meteors){
+      if(mt.px === undefined || mt.dead) continue;
+      const x = mt.px, y = mt.py;
+      const d = Math.hypot(mt.dx, mt.dy) || 1;
+      const ang = Math.atan2(mt.dy/d, mt.dx/d);
+      const fade = mt.main ? 1 : Math.max(0, 1 - mt.t/(mt.life*1.15));
+      if(fade <= 0.02) continue;
+      const L = mt.len*(mt.main ? 1 : 0.78);
+      c.save();
+      c.translate(x,y); c.rotate(ang);
+      c.globalCompositeOperation = 'lighter';
+      const g1 = c.createLinearGradient(-L,0,0,0);
+      g1.addColorStop(0,   'rgba(90,160,240,0)');
+      g1.addColorStop(.38, 'rgba(118,182,250,' + (0.16*fade) + ')');
+      g1.addColorStop(.78, 'rgba(180,222,255,' + (0.50*fade) + ')');
+      g1.addColorStop(1,   'rgba(255,255,255,' + (0.92*fade) + ')');
+      c.beginPath();
+      c.moveTo(0,-7*mt.w); c.lineTo(0,7*mt.w);
+      c.lineTo(-L, 46*mt.w); c.lineTo(-L,-46*mt.w);
+      c.closePath(); c.fillStyle = g1; c.fill();
+      const g2 = c.createLinearGradient(-L*0.96,0,0,0);
+      g2.addColorStop(0,   'rgba(180,215,255,0)');
+      g2.addColorStop(.62, 'rgba(224,240,255,' + (0.50*fade) + ')');
+      g2.addColorStop(1,   'rgba(255,255,255,' + (1.0*fade) + ')');
+      c.beginPath();
+      c.moveTo(0,-2.6*mt.w); c.lineTo(0,2.6*mt.w);
+      c.lineTo(-L*0.96, 6.4*mt.w); c.lineTo(-L*0.96,-6.4*mt.w);
+      c.closePath(); c.fillStyle = g2; c.fill();
+      c.restore();
+      c.globalCompositeOperation = 'source-over';
+      const r = (mt.main ? 7.4 : 4.0)*fade;
+      const gg = c.createRadialGradient(x,y,0,x,y,r*7);
+      gg.addColorStop(0,  'rgba(255,255,255,' + (0.95*fade) + ')');
+      gg.addColorStop(.22,'rgba(226,242,255,' + (0.60*fade) + ')');
+      gg.addColorStop(.55,'rgba(150,200,255,' + (0.22*fade) + ')');
+      gg.addColorStop(1,  'rgba(120,175,255,0)');
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.beginPath(); c.arc(x,y,r*7,0,7); c.fillStyle = gg; c.fill();
+      c.restore();
+      this.star4(x, y, r*(mt.main ? 1.5 : 1), fade, ang);
+    }
+  },
+
+  /* ================= 音效提示点 ================= */
+  buildCues(){
+    const T = this.PH, C = [];
+    let t = 0;
+    C.push({t:0, f:()=>{ SFX.charge(T.charge); SFX.padOn(); }});
+    t += T.charge;
+    C.push({t:t-0.12, f:()=>SFX.wash(T.wash)});
+    t += T.wash;
+    C.push({t:t, f:()=>SFX.vortex(T.vortex)});
+    t += T.vortex;
+    const mS = t;
+    this.meteorStart = mS;
+    const born = at => at - mS;
+    C.push({t:mS, f:()=>this.spawnMeteor(true, 0)});
+    /* 副流星按段长均布，保证整段流星雨不断流（不随段长变化而变稀） */
+    const nSec = Math.max(4, Math.round(T.meteor / 0.45));
+    for(let i=0;i<nSec;i++){
+      const at = mS + 0.14 + i * ((T.meteor - 0.45) / nSec);
+      C.push({t:at, f:()=>this.spawnMeteor(false, born(at))});
+    }
+    let k = 0;
+    const wStep = Math.max(0.16, T.meteor / 9);
+    for(let tt = mS; tt < mS + T.meteor - 0.12; tt += wStep){
+      const idx = k++;
+      C.push({t:tt, f:()=>SFX.meteor(idx)});
+    }
+    for(let i=0;i<12;i++){
+      const tt = mS + 0.18 + i * ((T.meteor - 0.3) / 12) + Math.random()*0.06;
+      C.push({t:tt, f:()=>SFX.sparkle(1650 + Math.random()*2500, 0.05, 1.7)});
+    }
+    t += T.meteor;
+    C.push({t:t, f:()=>{ SFX.burst(this.rarity >= 5); SFX.padOff(0.9); }});
+    t += T.burst;
+    C.push({t:t, f:()=>SFX.pillar(T.pillar)});
+    for(let i=0;i<5;i++){
+      const ii = i;
+      C.push({t:t + 0.16 + ii*0.18, f:()=>SFX.sparkle(1180 + ii*280, 0.062, 1.9)});
+    }
+    t += T.pillar;
+    C.push({t:t + 0.04, f:()=>SFX.reveal(this.rarity)});
+    this.cues = C.sort((a,b)=>a.t-b.t);
+    this.cueIdx = 0;
+    this.total = t + T.reveal;
+  },
+
+  /* ================= 主入口 ================= */
+  play(rarity){
+    this.rarity = rarity;
+    this.done = false; this.jumping = false;
+    this.parts = []; this.rings = []; this.sparks = []; this.meteors = [];
+    this.clouds = []; this.sea = [];
+    this.skyMix = 0; this.shake = 0; this.burstPlaced = false;
+    this.resize();
+    this.burstX = this.W/2; this.burstY = this.H*0.60;
+    this.buildCues();
+    this.t0 = performance.now();
+    this.lastTs = this.t0;
+    this.layer.classList.add('on');
+    const hm = document.getElementById('hitMsg');
+    if(hm){ hm.className = 'hitmsg'; hm.textContent = ''; }
+    cancelAnimationFrame(this.raf);
+    this.loop();
+    return new Promise(res=>{ this.resolve = res; });
+  },
+  resolveNow(){
+    if(this.done) return;
+    this.done = true;
+    cancelAnimationFrame(this.raf);
+    this.phase = 'idle';
+    SFX.padOff(0.5);
+    if(this.resolve){
+      const r = this.resolve; this.resolve = null;
+      this.layer.classList.remove('on');
+      r();
+    }
+  },
+  /* 跳过：快进到揭示段 */
+  skip(){
+    if(this.done || this.phase === 'idle' || this.jumping) return;
+    this.jumping = true;
+    this.t0 = performance.now() - (this.total - this.PH.reveal)*1000;
+    this.cueIdx = this.cues.length;
+    this.skyMix = 1; this.meteors = [];
+    SFX.padOff(0.3);
+    SFX.reveal(this.rarity);
+  },
+  finish(){ this.skip(); },
+  get busy(){ return this.phase !== 'idle' && !this.done; },
+
+  /* ================= 每帧 ================= */
+  loop(){
+    if(this.done) return;
+    const nowMs = performance.now();
+    const el = (nowMs - this.t0)/1000;
+    const ctx = this.ctx, W = this.W, H = this.H, T = this.PH;
+    const order = ['charge','wash','vortex','meteor','burst','pillar','reveal'];
+    let acc = 0, ph = 'reveal', pt = 1, phStart = acc;
+    for(const k of order){
+      if(el < acc + T[k]){ ph = k; pt = (el - acc)/T[k]; phStart = acc; break; }
+      acc += T[k]; phStart = acc;
+    }
+    this.phase = ph; this.pt = Math.max(0, Math.min(1, pt));
+
+    while(this.cueIdx < this.cues.length && this.cues[this.cueIdx].t <= el){
+      const cue = this.cues[this.cueIdx++];
+      try{ cue.f(); }catch(e){}
+    }
+
+    ctx.setTransform(this.dpr,0,0,this.dpr,0,0);
+    ctx.save();
+    if(this.shake > 0.25){
+      ctx.translate((Math.random()-0.5)*this.shake, (Math.random()-0.5)*this.shake);
+      this.shake *= 0.90;
+    }
+    ctx.clearRect(-60,-60,W+120,H+120);
+    const cx = W/2, cy = H*0.44;
+
+    /* ① 蓄势 */
+    if(ph === 'charge'){
+      const p = this.pt;
+      ctx.fillStyle = 'rgba(5,9,20,' + (0.86*p*p) + ')';
+      ctx.fillRect(-60,-60,W+120,H+120);
+      const r = 40 + p*p*Math.max(W,H)*0.62;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0,  'rgba(255,255,255,' + (0.10 + p*0.46) + ')');
+      g.addColorStop(.45,'rgba(226,236,255,' + (0.05 + p*0.24) + ')');
+      g.addColorStop(1,  'rgba(170,195,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(-60,-60,W+120,H+120);
+      for(let i=0;i<3;i++){
+        const rr = Math.max(20, r*(1 - i*0.28));
+        ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 7);
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.05 + p*0.10) + ')';
+        ctx.lineWidth = 1.4 + i; ctx.stroke();
+      }
+    }
+
+    /* ② 白光冲刷 */
+    if(ph === 'wash'){
+      const p = this.pt;
+      const e = Math.pow(Math.min(1, p/0.72), 0.72);
+      /* 底：迅速转为不透明，避免页面内容透出来 */
+      const baseA = Math.min(1, 0.86 + p*5);
+      ctx.fillStyle = 'rgba(6,10,22,' + baseA + ')';
+      ctx.fillRect(-60,-60,W+120,H+120);
+      const r = Math.max(W,H)*(0.10 + e*1.15);
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0,  'rgba(255,255,255,' + (0.62 + e*0.38) + ')');
+      g.addColorStop(.40,'rgba(248,246,255,' + (0.42 + e*0.52) + ')');
+      g.addColorStop(.76,'rgba(226,234,255,' + (0.14 + e*0.50) + ')');
+      g.addColorStop(1,  'rgba(196,214,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(-60,-60,W+120,H+120);
+      for(let i=0;i<4;i++){
+        const rr = r*(1 - i*0.17);
+        if(rr <= 2) continue;
+        ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 7);
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.14*(1-p) + 0.05) + ')';
+        ctx.lineWidth = 2.4 + i*1.8; ctx.stroke();
+      }
+      const veil = Math.max(0, (p - 0.44)/0.56);
+      if(veil > 0){ ctx.fillStyle = 'rgba(252,251,255,' + veil + ')'; ctx.fillRect(-60,-60,W+120,H+120); }
+    }
+
+    /* ③ 云涡开启 */
+    if(ph === 'vortex'){
+      const p = this.pt;
+      if(!this.clouds.length) this.genVortexClouds();
+      const m = Math.min(W,H);
+      this.drawSky(0.04 + p*0.05);
+      const wb = Math.max(0, 1 - p/0.55);
+      if(wb > 0.002){
+        ctx.fillStyle = 'rgba(255,255,255,' + wb + ')';
+        ctx.fillRect(-60,-60,W+120,H+120);
+      }
+      const coreA = Math.max(0, 1 - p/0.55);
+      if(coreA > 0.01){
+        const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, m*0.42);
+        cg.addColorStop(0,  'rgba(255,255,255,' + (0.95*coreA) + ')');
+        cg.addColorStop(.35,'rgba(240,246,255,' + (0.55*coreA) + ')');
+        cg.addColorStop(1,  'rgba(200,222,255,0)');
+        ctx.fillStyle = cg; ctx.fillRect(-60,-60,W+120,H+120);
+      }
+      const hole = m*(0.015 + p*0.46);
+      ctx.globalCompositeOperation = 'lighter';
+      for(const c of this.clouds){
+        const R = c.r0*(0.56 + p*1.02);
+        const ang = c.a0 + p*c.sp*(1.6 + 2.8*Math.exp(-R/(0.34*m)));
+        const x = cx + Math.cos(ang)*R;
+        const y = cy + Math.sin(ang)*R*0.80;
+        const sz = c.sz*(1 + p*0.40);
+        const dist = Math.hypot(x-cx, (y-cy)/0.80);
+        let al = c.al * Math.min(1, Math.max(0, (dist - hole*0.80)/(hole*0.95 + 1)));
+        al *= (1 - p*0.30);
+        if(al <= 0.008) continue;
+        ctx.globalAlpha = al;
+        ctx.drawImage(this.cloudSprite, x-sz/2, y-sz/2, sz, sz);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    /* ④ 星空流星 */
+    if(ph === 'meteor'){
+      const p = this.pt;
+      this.skyMix = Math.min(1, 0.42 + p*0.58);
+      this.drawSky(this.skyMix);
+      this.drawSeaClouds(el, Math.min(1, p*3.2));
+      this.meteorStep(el - phStart);
+      this.drawMeteors();
+      if(p < 0.28 && this.clouds.length){
+        const q = 1 - p/0.28;
+        ctx.globalCompositeOperation = 'lighter';
+        for(let i=0;i<70;i++){
+          const c = this.clouds[i]; if(!c) break;
+          const R = c.r0*1.58;
+          const ang = c.a0 + c.sp*2.6;
+          const x = cx + Math.cos(ang)*R, y = cy + Math.sin(ang)*R*0.80;
+          const sz = c.sz*1.4;
+          ctx.globalAlpha = c.al*0.45*q;
+          ctx.drawImage(this.cloudSprite, x-sz/2, y-sz/2, sz, sz);
+        }
+        ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+
+    /* ⑤ 光柱爆发 */
+    if(ph === 'burst'){
+      const p = this.pt;
+      if(!this.burstPlaced){
+        const mm = this.meteors.find(x=>x.main && x.px !== undefined);
+        this.burstX = mm ? mm.px : W*0.42;
+        this.burstY = mm ? mm.py : H*0.60;
+        this.burstPlaced = true;
+        this.shake = 22;
+        this.rings.push({r:8, a:1, w:12, max:Math.max(W,H)*0.62});
+        this.rings.push({r:2, a:.85, w:5, max:Math.max(W,H)*0.40});
+        this.spawn(cx, cy, this.rarity === 5 ? 150 : 110, 13);
+      }
+      const flare = p < 0.22 ? p/0.22 : Math.max(0, 1 - (p-0.22)/0.78);
+      this.drawSky(1, 0.30*(1 - flare*0.5));
+      this.drawSeaClouds(el, 0.75);
+      const bx = this.burstX, by = this.burstY;
+      const n = this.rarity === 5 ? 30 : this.rarity === 4 ? 24 : 16;
+      ctx.globalCompositeOperation = 'lighter';
+      for(let i=0;i<n;i++){
+        const a = (i/n)*6.283 + 0.2 + p*0.5;
+        const L = Math.min(W,H)*(0.16 + Math.min(p,0.7)*1.35);
+        const wd = (i%2 ? 0.010 : 0.028)*L;
+        const g = ctx.createLinearGradient(bx, by, bx+Math.cos(a)*L, by+Math.sin(a)*L);
+        g.addColorStop(0,  'rgba(255,255,255,' + (0.95*flare) + ')');
+        g.addColorStop(.34,'rgba(214,238,255,' + (0.46*flare) + ')');
+        g.addColorStop(1,  'rgba(176,213,255,0)');
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(bx+Math.cos(a+0.42)*wd, by+Math.sin(a+0.42)*wd);
+        ctx.lineTo(bx+Math.cos(a)*L,      by+Math.sin(a)*L);
+        ctx.lineTo(bx+Math.cos(a-0.42)*wd, by+Math.sin(a-0.42)*wd);
+        ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+      }
+      const cr = Math.min(W,H)*(0.05 + p*0.52);
+      const cg = ctx.createRadialGradient(bx, by, 0, bx, by, cr);
+      cg.addColorStop(0,  'rgba(255,255,255,1)');
+      cg.addColorStop(.28,'rgba(238,248,255,' + (0.78*flare) + ')');
+      cg.addColorStop(.62,'rgba(180,216,255,' + (0.30*flare) + ')');
+      cg.addColorStop(1,  'rgba(140,190,255,0)');
+      ctx.beginPath(); ctx.arc(bx, by, cr, 0, 7); ctx.fillStyle = cg; ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      this.rings = this.rings.filter(r=>{
+        r.r += (r.max - r.r)*0.10; r.a *= 0.955;
+        if(r.a < 0.02) return false;
+        ctx.beginPath(); ctx.arc(bx, by, r.r, 0, 7);
+        ctx.strokeStyle = 'rgba(236,246,255,' + (r.a*0.8) + ')';
+        ctx.lineWidth = r.w*r.a; ctx.stroke();
+        return true;
+      });
+      ctx.fillStyle = 'rgba(255,255,255,' + (flare*0.62) + ')';
+      ctx.fillRect(-60,-60,W+120,H+120);
+      this.starsKick(bx, by, flare);
+    }
+
+    /* ⑥ 云海光柱 */
+    if(ph === 'pillar'){
+      const p = this.pt;
+      const rise = Math.min(1, p/0.42);
+      this.drawSky(1);
+      this.drawSeaClouds(el, 1);
+      const hx = W*0.44, hy = H*0.70;
+      ctx.globalCompositeOperation = 'lighter';
+      /* 竖直光柱（三层叠加做出柔边，向上延伸到画面外） */
+      const colH = H*(0.55 + rise*1.10), colW = W*(0.024 + Math.min(p,0.55)*0.055);
+      const layers = [[1.0,0.86,1.0],[1.9,0.24,0.74],[3.5,0.10,0.58]];
+      for(const [wMul, aMul, hMul] of layers){
+        const ch = colH*hMul;
+        const gg = ctx.createLinearGradient(hx, hy+30, hx, hy-ch);
+        gg.addColorStop(0,  'rgba(255,255,255,' + (rise*aMul) + ')');
+        gg.addColorStop(.42,'rgba(232,245,255,' + (rise*aMul*0.52) + ')');
+        gg.addColorStop(1,  'rgba(200,226,255,0)');
+        ctx.beginPath();
+        ctx.moveTo(hx-colW*wMul*0.42, hy+30); ctx.lineTo(hx+colW*wMul*0.42, hy+30);
+        ctx.lineTo(hx+colW*wMul, hy-ch);      ctx.lineTo(hx-colW*wMul, hy-ch);
+        ctx.closePath(); ctx.fillStyle = gg; ctx.fill();
+      }
+      /* 扇形光束（两层叠加以获得柔边） */
+      for(let i=0;i<26;i++){
+        const a = -Math.PI/2 + (i-12.5)/12.5*0.92;
+        const L = H*(0.30 + rise*0.60);
+        const gg = ctx.createLinearGradient(hx, hy, hx+Math.cos(a)*L, hy+Math.sin(a)*L);
+        gg.addColorStop(0,'rgba(255,255,255,' + (0.17*rise) + ')');
+        gg.addColorStop(.45,'rgba(226,242,255,' + (0.09*rise) + ')');
+        gg.addColorStop(1,'rgba(200,226,255,0)');
+        ctx.beginPath();
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(hx+Math.cos(a+0.055)*L, hy+Math.sin(a+0.055)*L);
+        ctx.lineTo(hx+Math.cos(a-0.055)*L, hy+Math.sin(a-0.055)*L);
+        ctx.closePath(); ctx.fillStyle = gg; ctx.fill();
+      }
+      /* 地平线光晕（纯径向，边界自然消失） */
+      const hr = W*0.46;
+      const hg = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
+      hg.addColorStop(0,  'rgba(255,255,255,' + (0.92*rise) + ')');
+      hg.addColorStop(.20,'rgba(238,248,255,' + (0.62*rise) + ')');
+      hg.addColorStop(.55,'rgba(212,235,255,' + (0.22*rise) + ')');
+      hg.addColorStop(1,  'rgba(190,218,255,0)');
+      ctx.beginPath(); ctx.arc(hx, hy, hr, 0, 7); ctx.fillStyle = hg; ctx.fill();
+      const sweep = Math.max(0, 1 - Math.abs(p-0.5)/0.5);
+      const sg = ctx.createLinearGradient(0, hy-H*0.06, 0, hy+H*0.02);
+      sg.addColorStop(0,'rgba(255,255,255,0)');
+      sg.addColorStop(1,'rgba(255,255,255,' + (0.5*sweep*rise) + ')');
+      ctx.fillStyle = sg; ctx.fillRect(0, hy-H*0.06, W, H*0.08);
+      ctx.globalCompositeOperation = 'source-over';
+      const wv = Math.max(0, (p-0.52)/0.48);
+      if(wv > 0){ ctx.fillStyle = 'rgba(255,255,255,' + (wv*0.96) + ')'; ctx.fillRect(-60,-60,W+120,H+120); }
+    }
+
+    /* ⑦ 揭示爆闪 */
+    if(ph === 'reveal'){
+      const p = this.pt;
+      const base = Math.max(0, 1 - p/0.34);
+      const hy = H*0.48;
+      const bg = ctx.createRadialGradient(cx, hy, 0, cx, hy, Math.max(W,H)*0.75);
+      bg.addColorStop(0,  'rgb(72,90,156)');
+      bg.addColorStop(.45,'rgb(36,46,96)');
+      bg.addColorStop(1,  'rgb(8,11,26)');
+      ctx.fillStyle = bg; ctx.fillRect(-60,-60,W+120,H+120);
+      const k = Math.min(1, p/0.72);
+      const rad = Math.min(W,H)*(0.14 + k*0.95);
+      const N = 54;
+      ctx.globalCompositeOperation = 'lighter';
+      for(let i=0;i<N;i++){
+        const a = (i/N)*6.283 + (i%3)*0.058;
+        const rIn = rad*0.16;
+        const L = rad*(0.46 + ((i*37)%13)/13*0.62);
+        const hw = rad*(0.032 + ((i*53)%7)/7*0.052);
+        const x0 = cx+Math.cos(a)*rIn, y0 = hy+Math.sin(a)*rIn;
+        const x1 = cx+Math.cos(a)*L,   y1 = hy+Math.sin(a)*L;
+        const mx = (x0+x1)/2, my = (y0+y1)/2;
+        const nx = -Math.sin(a), ny = Math.cos(a);
+        const g = ctx.createLinearGradient(x0,y0,x1,y1);
+        g.addColorStop(0,  'rgba(206,230,255,' + (0.58*k) + ')');
+        g.addColorStop(.55,'rgba(152,196,250,' + (0.86*k) + ')');
+        g.addColorStop(1,  'rgba(178,160,236,0)');
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(mx+nx*hw, my+ny*hw, x1, y1);
+        ctx.quadraticCurveTo(mx-nx*hw, my-ny*hw, x0, y0);
+        ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+      }
+      const cg = ctx.createRadialGradient(cx, hy, 0, cx, hy, rad*0.6);
+      cg.addColorStop(0,'rgba(232,242,255,' + (0.55*(1-k*0.6)) + ')');
+      cg.addColorStop(1,'rgba(150,190,250,0)');
+      ctx.beginPath(); ctx.arc(cx, hy, rad*0.6, 0, 7); ctx.fillStyle = cg; ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      if(base > 0){ ctx.fillStyle = 'rgba(255,255,255,' + base + ')'; ctx.fillRect(-60,-60,W+120,H+120); }
+    }
+
+    /* 通用粒子 */
+    this.sparks = this.sparks.filter(s=>{
+      s.x += s.vx*0.016; s.y += s.vy*0.016; s.vx *= 0.985; s.vy = s.vy*0.985 + 0.10;
+      s.rot += s.vr; s.life -= s.dec*0.016;
+      if(s.life <= 0) return false;
+      const a = Math.min(1, s.life)*(0.55 + 0.45*Math.sin(s.rot*2.2));
+      this.star4(s.x, s.y, s.r*Math.max(0.25, s.life), a*0.9, s.rot);
+      return true;
+    });
+    this.parts = this.parts.filter(p=>{
+      p.x += p.vx; p.y += p.vy; p.vy += 0.03; p.vx *= 0.985; p.vy *= 0.985; p.life -= p.decay;
+      if(p.life <= 0) return false;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r*Math.max(p.life,0), 0, 7);
+      ctx.fillStyle = 'rgba(226,240,255,' + (p.life*0.8) + ')'; ctx.fill();
+      return true;
+    });
+
+    ctx.restore();
+    if(el >= this.total){ this.resolveNow(); return; }
+    this.raf = requestAnimationFrame(()=>this.loop());
+  },
+  starsKick(bx, by, flare){
+    if(flare < 0.8) return;
+    const now = performance.now();
+    if(now - (this._kick||0) < 90) return;
+    this._kick = now;
+    for(let i=0;i<3;i++){
+      const a = Math.random()*6.283, d = Math.min(this.W,this.H)*(0.10 + Math.random()*0.35);
+      this.sparks.push({ x: bx+Math.cos(a)*d, y: by+Math.sin(a)*d, r: 1.4+Math.random()*2.0,
+        life: 1, dec: 0.5+Math.random()*0.6, rot: Math.random()*6.283, vr: (Math.random()-0.5)*0.05,
+        vx:(Math.random()-0.5)*40, vy:-10-Math.random()*40 });
+    }
+  },
+  spawn(x,y,n,spread){
+    for(let i=0;i<n;i++){
+      const a = Math.random()*6.283, sp = Math.random()*spread;
+      this.parts.push({x,y,vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1,
+        decay:0.012+Math.random()*0.020, r:Math.random()*2.6+0.8});
+    }
+  }
+};
+
+/* =========================================================
+   6. 翻牌
+   ========================================================= */
+/* 可爱风：浅色卡面上用「深一档」的同色系做描边与星色，才有对比 */
+const ACC = {5:'#e08a1e', 4:'#8f5fd0', 3:'#4a9bd8'};
+/* 卡面可用高度：窄屏卡片是 216×338 且 .artw 少 88px，桌面是 256×398 少 96px。
+   除以 1.2 是给竖排的 letter-spacing(0.2em) 留量，否则长名字会折到第二列。 */
+function monoSize(name){
+  const n = Math.max((name||'').length, 1);
+  const capH = window.innerWidth <= 880 ? 228 : 258;
+  return Math.max(14, Math.min(62, Math.floor(capH / (1.2 * n))));
+}
+
+const RV = {
+  layer:null, stage:null, grid:null, footer:null, rays:null,
+  resolveWait:null, busy:false,
+
+  init(){
+    this.layer  = document.getElementById('rvLayer');
+    this.stage  = document.getElementById('rvStage');
+    this.grid   = document.getElementById('rvGrid');
+    this.footer = document.getElementById('rvFooter');
+    this.rays   = document.getElementById('rays');
+    this.buildDeco();
+    document.addEventListener('pointerdown', ()=>{ if(this.resolveWait){ const r=this.resolveWait; this.resolveWait=null; r(); } });
+  },
+
+  /* 背景里飘浮的糖豆光点与小星星（一次生成，常驻） */
+  buildDeco(){
+    const d = document.getElementById('rvDeco');
+    if(!d || d.childElementCount) return;
+    const pal = ['#ffd166','#ffb3c8','#b7e08a','#a8d8f5','#d9b8f0','#ffe9a8','#9fe6d8'];
+    let h = '';
+    for(let i=0;i<34;i++){
+      const star = Math.random() < 0.38;
+      const sz = star ? (8 + Math.random()*13) : (7 + Math.random()*17);
+      const x  = (Math.random()*100).toFixed(1);
+      const y  = (6 + Math.random()*88).toFixed(1);
+      const dur= (8 + Math.random()*6).toFixed(1);
+      const dly= (Math.random()*1.6).toFixed(2);
+      const c  = pal[i % pal.length];
+      h += '<i' + (star ? ' class="st"' : '') + ' style="left:' + x + '%;top:' + y + '%;'
+        + 'width:' + sz.toFixed(1) + 'px;height:' + sz.toFixed(1) + 'px;--dc:' + c + ';'
+        + '--dur:' + dur + 's;animation-delay:' + dly + 's"></i>';
+    }
+    d.innerHTML = h;
+  },
+  wait(ms){
+    return new Promise(res=>{
+      const t = setTimeout(()=>{ this.resolveWait=null; res(); }, ms);
+      this.resolveWait = ()=>{ clearTimeout(t); res(); };
+    });
+  },
+  waitClick(){ return new Promise(res=>{ this.resolveWait = res; }); },
+
+  /* 彩屑：马卡龙多色轮流取（比单一色更「糖果」） */
+  shardsHTML(n, r){
+    const pal = r===5 ? ['#ffd166','#ffb347','#ffe9a8','#ff9f68']
+              : r===4 ? ['#c9a8f0','#b58ce8','#e6d4ff','#f0b7e8']
+                      : ['#a8d8f5','#8ecdf2','#d5ecfd','#bfe4fb'];
+    let h = '';
+    for(let i=0;i<n;i++){
+      const a = (i*(360/n) + (Math.random()*13-6.5)).toFixed(1);
+      const L = (92 + Math.random()*152).toFixed(0);
+      const w = (1.6 + Math.random()*3.4).toFixed(1);
+      const d = (Math.random()*0.14).toFixed(2);
+      const col = pal[i % pal.length];
+      h += '<i style="rotate:' + a + 'deg"><b style="width:' + w + 'px;height:' + L + 'px;'
+        + 'background:linear-gradient(180deg,' + col + ',rgba(255,255,255,.78) 52%,rgba(255,255,255,0));'
+        + 'animation-delay:' + d + 's"></b></i>';
+    }
+    return h;
+  },
+  cardHTML(item, r){
+    const acc = ACC[r];
+    const ms = monoSize(item.name);
+    const ls = Math.round(ms*0.2);
+    return `<div class="card r${r}">
+      <div class="rays" style="--rg:${acc}"></div>
+      <div class="bg"></div>
+      <div class="shards">${this.shardsHTML(44, r)}</div>
+      <div class="artw"><div class="mono-out" style="font-size:${ms}px;letter-spacing:${ls}px">${esc(item.name)}</div><div class="mono" style="font-size:${ms}px;letter-spacing:${ls}px">${esc(item.name)}</div></div>
+      <div class="silh" style="font-size:${ms}px;letter-spacing:${ls}px">${esc(item.name)}</div>
+      ${r>=4?`<div class="badge ${item.isNew?'':'dup'}">${item.isNew?'NEW':'已拥有'}</div>`:''}
+      <div class="info">
+        <div class="nm">${esc(item.name)}</div>
+        <div class="st">${'★'.repeat(r)}</div>
+        <div class="mt">${esc(item.tag||'—')}</div>
+      </div>
+    </div>`;
+  },
+  async showBig(item, r){
+    this.stage.innerHTML = this.cardHTML(item, r);
+    const card = this.stage.querySelector('.card');
+    if(card){ card.classList.remove('burst'); void card.offsetWidth; card.classList.add('burst'); }
+    const cr = this.stage.querySelector('.rays');
+    if(cr) setTimeout(()=>cr.classList.add('on'), 60);
+    if(r===5){ this.rays.style.setProperty('--rg', ACC[5]); this.rays.classList.add('on'); }
+    else this.rays.classList.remove('on');
+    SFX.chime(r);
+    SFX.settle(r);
+    if(r===5){
+      const f = document.getElementById('rvFlash');
+      f.style.transition='none'; f.style.opacity='0.86';
+      requestAnimationFrame(()=>{ f.style.transition='opacity .6s'; f.style.opacity='0'; });
+    }
+  },
+  gridHTML(item, r, i){
+    return `<div class="gc" style="--rc:${r===5?'#ffe3ae':r===4?'#e0cdfb':'#bfe0f7'};--rg:${ACC[r]};animation-delay:${i*0.045}s">
+      <div class="gbg"></div>
+      <div class="gmono">${esc((item.name||'?').slice(0,1))}</div>
+      ${item.isNew?'<div class="gk">NEW</div>':''}
+      <div class="gn">${esc(item.name)}</div>
+      <div class="gs">${'★'.repeat(r)}</div>
+    </div>`;
+  },
+  async run(results){
+    if(this.busy || !results.length) return;
+    this.busy = true;
+    this.layer.classList.add('on');
+    this.grid.classList.remove('on'); this.grid.innerHTML='';
+    this.stage.style.display='grid';
+    const b = curBanner();
+
+    if(results.length === 1){
+      await this.showBig(results[0], results[0].rarity);
+      this.buildFooter(1);
+      await this.waitClick();
+    } else {
+      this.footer.classList.add('hide'); this.footer.innerHTML='';
+      for(let i=0;i<results.length;i++){
+        await this.showBig(results[i], results[i].rarity);
+        if(i<results.length-1) await this.wait(720);
+      }
+      await this.wait(320);
+      this.stage.style.display='none';
+      this.rays.classList.remove('on');
+      this.grid.innerHTML = results.map((r,i)=>this.gridHTML(r, r.rarity, i)).join('');
+      this.grid.classList.add('on');
+      this.buildFooter(results.length);
+      this.footer.classList.remove('hide');
+    }
+    this.busy = false;
+  },
+  buildFooter(){
+    this.footer.innerHTML = `
+      <button class="wbtn sec" id="rvClose" style="padding:0 34px">确认</button>
+      <button class="wbtn sec" id="rvAgain1" style="padding:0 30px">再抽一次</button>`;
+    const c=document.getElementById('rvClose'); if(c) c.onclick=e=>{e.stopPropagation(); this.close();};
+    const a1=document.getElementById('rvAgain1'); if(a1) a1.onclick=e=>{e.stopPropagation(); this.close(); startPull(1);};
+  },
+  close(){
+    this.layer.classList.remove('on');
+    this.rays.classList.remove('on');
+    this.stage.innerHTML=''; this.grid.innerHTML=''; this.grid.classList.remove('on');
+    if(this.resolveWait){ const r=this.resolveWait; this.resolveWait=null; r(); }
+  }
+};
+
+/* =========================================================
+   7. 工具
+   ========================================================= */
+function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function curBanner(){ return BANNERS.find(x=>x.id===state.banner); }
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._tm); t._tm = setTimeout(()=>t.classList.remove('on'), 1900);
+}
+/* =========================================================
+   8. 主流程 / 渲染
+   ========================================================= */
+
+/* 抽卡演出。货币体系已整体移除，祈愿不再消耗任何资源 */
+async function startPull(n){
+  if(FX.busy || RV.busy) return;
+  SFX.init(); SFX.resume();
+  if(!state.items.length){ toast('还没有任何抽卡对象，请先添加'); openManager('list'); return; }
+  if(!state.items.some(i=>wOf(i) > 0)){ toast('所有对象权重均为 0，无法抽取'); openManager('rate'); return; }
+
+  const b = curBanner();
+  const results = pullN(b, n);
+  save(); renderBanner();
+
+  const best = Math.max(...results.map(r=>r.rarity));
+  await FX.play(best);
+  await RV.run(results);
+  save(); renderBanner();
+}
+
+/* 抽卡界面已移除：这里只负责同步下方居中的「祈愿·1」按钮与空卡池提示 */
+function renderBanner(){
+  const ready = state.items.some(i=>wOf(i) > 0);
+  const btn = document.getElementById('p1');
+  if(btn){
+    btn.classList.toggle('cold', !ready);
+    btn.title = ready ? '祈愿·1' : '尚无可用对象，点击后前往「对象管理」添加';
+  }
+  const hint = document.getElementById('emptyHint');
+  if(hint) hint.style.display = ready ? 'none' : 'flex';
+}
+
+/* =========================================================
+   9. 弹窗：记录
+   ========================================================= */
+function showModal(title, html, tabs){
+  document.getElementById('mTitle').textContent = title;
+  const t = document.getElementById('mTabs');
+  if(tabs){ t.style.display='flex'; t.innerHTML = tabs.map((x,i)=>`<div data-tab="${x.k}" class="${i===0?'on':''}">${x.n}</div>`).join(''); }
+  else { t.style.display='none'; t.innerHTML=''; }
+  document.getElementById('mBody').innerHTML = html;
+  document.getElementById('mask').classList.add('on');
+}
+function closeModal(){
+  document.getElementById('mask').classList.remove('on');
+  if(typeof WALL !== 'undefined'){ WALL.camStop(); const b = document.getElementById('camBox'); if(b) b.innerHTML=''; }
+  if(typeof BSKIN !== 'undefined') BSKIN.camOff();
+}
+
+function openHistory(){
+  const rows = state.history.slice(0,300).map(h=>{
+    const it = itemById(h.id);
+    return `<div class="hrow r${h.r}">
+      <span class="rk r${h.r}">${'★'.repeat(h.r)}</span>
+      <span>${esc(it?it.name:'（已删除）')}</span>
+      <span class="pt">第${h.p||'?'}抽</span>
+      <span class="tm">${new Date(h.t).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+    </div>`;
+  }).join('');
+  showModal('祈愿记录',
+    rows ? `<div class="hrow head"><span>稀有度</span><span>名称</span><span>出货抽数</span><span>时间</span></div>${rows}`
+         : `<div class="empty">还没有祈愿记录</div>`);
+}
+/* =========================================================
+   11. 对象管理
+   ========================================================= */
+let mTab = 'list';
+function itemById(id){ return state.items.find(i=>i.id===id); }
+function uid(){ return 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function openManager(tab){
+  mTab = tab || mTab;
+  showModal('设置与管理', '', [
+    {k:'list', n:'对象列表'},
+    {k:'bulk', n:'批量添加'},
+    {k:'rate', n:'概率设置'},
+    {k:'pool', n:'卡池设置'},
+    {k:'wall', n:'背景壁纸'},
+    {k:'btn', n:'按钮'},
+    {k:'audio', n:'音效'},
+  ]);
+  document.querySelectorAll('#mTabs div').forEach(d=>d.onclick=()=>{ mTab=d.dataset.tab; paintManager(); });
+  paintManager();
+}
+function paintManager(){
+  document.querySelectorAll('#mTabs div').forEach(d=>d.classList.toggle('on', d.dataset.tab===mTab));
+  const body = document.getElementById('mBody');
+  if(mTab==='list') body.innerHTML = mgrListHTML();
+  else if(mTab==='bulk') body.innerHTML = mgrBulkHTML();
+  else if(mTab==='rate') body.innerHTML = mgrRateHTML();
+  else if(mTab==='wall') body.innerHTML = mgrWallHTML();
+  else if(mTab==='btn') body.innerHTML = mgrBtnHTML();
+  else if(mTab==='audio') body.innerHTML = mgrAudioHTML();
+  else body.innerHTML = mgrPoolHTML();
+  if(mTab==='rate') updateSim();
+  if(mTab==='wall') WALL.mountPanel(); else WALL.camStop();
+  if(mTab==='btn') BSKIN.mountPanel(); else BSKIN.camOff();
+  if(mTab==='bulk') setTimeout(()=>{ const t=document.getElementById('bulkText'); if(t) t.focus(); }, 60);
+}
+
+function mgrListHTML(){
+  const sorted = [...state.items].sort((a,b)=> b.rarity-a.rarity || a.name.localeCompare(b.name,'zh'));
+  const rows = sorted.map(i=>`
+    <div class="irow" data-id="${i.id}">
+      <select data-f="rarity">
+        <option value="5" ${i.rarity===5?'selected':''}>★★★★★</option>
+        <option value="4" ${i.rarity===4?'selected':''}>★★★★</option>
+        <option value="3" ${i.rarity===3?'selected':''}>★★★</option>
+      </select>
+      <div class="iname" contenteditable="true" data-f="name">${esc(i.name)}</div>
+      <div class="itag" contenteditable="true" data-f="tag">${esc(i.tag||'')}</div>
+      <div class="iup ${i.up?'on':''}" data-f="up">${i.up?'UP':'—'}</div>
+      <div class="idel" data-f="del">✕</div>
+    </div>`).join('');
+  return `
+    <div class="tline" style="margin-top:0">快速添加</div>
+    <div class="field" style="margin-bottom:8px">
+      <input type="text" id="qName" placeholder="名称（如：星轨之约）" maxlength="20">
+      <select id="qRar">
+        <option value="5">★★★★★</option>
+        <option value="4">★★★★</option>
+        <option value="3" selected>★★★</option>
+      </select>
+      <input type="text" id="qTag" placeholder="标签（如：角色 / 武器 / 卡牌）" maxlength="12" style="flex:1 1 120px">
+      <label class="chk"><input type="checkbox" id="qUp">设为 UP</label>
+      <button class="mini" id="qAdd">添加</button>
+    </div>
+    <div class="hint">名称与标签可直接点击修改。UP 标记影响「活动祈愿」的 50/50 机制——只有被标记为 UP 的对象才会进入 UP 池。</div>
+    <div class="tline">对象列表（共 ${state.items.length} 个）</div>
+    ${state.items.length ? `<div class="ilist">
+      <div class="ihead"><span>稀有度</span><span>名称</span><span>标签</span><span>UP</span><span></span></div>
+      ${rows}</div>`
+      : `<div class="empty">还没有对象，请在上方添加，或使用「批量添加」</div>`}
+    <div class="tline">操作</div>
+    <div class="field">
+      <button class="mini ghost" id="demoBtn">载入示例数据</button>
+      <button class="mini danger" id="clrBtn">清空全部对象</button>
+    </div>`;
+}
+function mgrBulkHTML(){
+  return `
+    <div class="hint">
+      每行一个对象，格式：<code>名称,稀有度,标签</code>，可在末尾追加 <code>,UP</code> 表示概率提升。<br>
+      稀有度填 <code>5</code> / <code>4</code> / <code>3</code>；标签可省略。逗号支持中英文、制表符或空格分隔。<br>
+      示例：<code>星轨之约,5,角色,UP</code>
+    </div>
+    <textarea id="bulkText" placeholder="星轨之约,5,角色,UP&#10;白夜行者,5,角色&#10;晨曦剑士,4,角色&#10;普通补给,3,道具"></textarea>
+    <div class="bulkrow">
+      <label class="chk"><input type="checkbox" id="bulkClear">导入前清空现有对象</label>
+      <button class="mini" id="bulkAdd">导入</button>
+      <button class="mini ghost" id="demoBtn2">载入示例数据</button>
+    </div>`;
+}
+function mgrRateHTML(){
+  const r = R();
+  const f = (k,label,unit,step,min,max)=>`<label>
+      <span>${label} <em>${unit}</em></span>
+      <input type="number" data-rate="${k}" value="${r[k]}" step="${step}" min="${min}" max="${max}">
+    </label>`;
+  const groups = [5,4,3].map(rar=>{
+    const arr = state.items.filter(i=>i.rarity===rar);
+    if(!arr.length) return '';
+    const tot = wsum(arr);
+    const rows = arr.map(i=>{
+      const w = wOf(i);
+      const mx = Math.max(10, Math.ceil(w*2));
+      return `<div class="wrow">
+        <span class="wn" title="${esc(i.name)}">${esc(i.name)}</span>
+        <input type="range" min="0" max="${mx}" step="0.1" data-w="${i.id}" value="${w}">
+        <input type="number" min="0" max="1000" step="0.1" data-wn="${i.id}" value="${w}">
+        <span class="wp" data-wp="${i.id}">—</span>
+      </div>`;
+    }).join('');
+    return `<div class="wgroup">
+      <div class="whead"><span class="rk r${rar}">${'★'.repeat(rar)}</span>
+        <b>${arr.length} 个对象 · 权重合计 <span data-wtot="${rar}">${tot.toFixed(1)}</span></b>
+        <button class="wbtn2" data-avg="${rar}">全部设为 1</button></div>
+      ${rows}</div>`;
+  }).join('');
+
+  return `
+    <div class="hint">
+      所有概率均可自由调节。五星 / 四星的<b>出货概率</b>由下面的参数决定；<b>每个对象</b>的概率由其权重在同稀有度内按比例分配——权重设为 <code>0</code> 即该对象不再出现。<br>
+      活动祈愿中 UP 对象的出率会再乘以 UP 分支占比（当前 <b>${(1/(2-Math.min(r.up,100)/100)*100).toFixed(1)}%</b>），非 UP 对象分摊剩余部分。
+    </div>
+    <div class="tline" style="margin-top:0">五星概率</div>
+    <div class="rgrid">
+      ${f('r5base','基础概率','%',0.1,0,100)}
+      ${f('r5soft','开始提升','第 n 抽',1,1,999)}
+      ${f('r5step','每抽递增','%',0.1,0,100)}
+      ${f('r5hard','硬保底','第 n 抽',1,1,999)}
+    </div>
+    <div class="tline">四星概率</div>
+    <div class="rgrid">
+      ${f('r4base','基础概率','%',0.1,0,100)}
+      ${f('r4soft','保底前一抽','%',0.1,0,100)}
+      ${f('r4hard','硬保底','第 n 抽',1,1,99)}
+    </div>
+    <div class="tline">活动祈愿 UP 机制</div>
+    <div class="rgrid">
+      ${f('up','UP 命中概率','%',1,0,100)}
+    </div>
+    <div class="simbox" id="simBox"></div>
+    <div class="field" style="margin-top:12px">
+      <button class="mini ghost" id="rateReset">恢复默认概率</button>
+    </div>
+    <div class="tline">对象概率分配（每个对象单独可调）</div>
+    <div class="whead" style="justify-content:flex-end">
+      <b style="font-size:11px">左：同稀有度内出率　　右：该稀有度综合出率</b></div>
+    ${groups || '<div class="empty">还没有对象，请先在「对象列表」中添加</div>'}`;
+}
+
+let SIMCACHE = null;
+function updateSim(){
+  const box = document.getElementById('simBox'); if(!box) return;
+  const s = simulate(120000);
+  SIMCACHE = s;
+  const r = R();
+  const warn = [];
+  if(r.r5soft > r.r5hard) warn.push('五星「开始提升」大于硬保底，该段设置不生效');
+  if(r.r5hard < 1) warn.push('五星硬保底需 ≥ 1');
+  if(r.r4hard < 1) warn.push('四星硬保底需 ≥ 1');
+  box.innerHTML = `
+    实测（12 万次模拟）：五星 <b>${(s.p5*100).toFixed(2)}%</b>（平均 <b>${s.avg5.toFixed(1)}</b> 抽）·
+    四星 <b>${(s.p4*100).toFixed(2)}%</b>（平均 <b>${s.avg4.toFixed(1)}</b> 抽）·
+    三星 <b>${(s.p3*100).toFixed(2)}%</b><br>
+    <i>活动祈愿 UP 对象综合命中率 ${(s.upRate*100).toFixed(1)}%（单次 UP 概率 ${r.up}%，未中则下次必中）</i>
+    ${warn.length ? `<br><i style="color:#e89a9a">⚠ ${warn.join('；')}</i>` : ''}`;
+  updatePcts();
+}
+function updatePcts(){
+  const b = curBanner();
+  const tier = {5: SIMCACHE?SIMCACHE.p5:0, 4: SIMCACHE?SIMCACHE.p4:0, 3: SIMCACHE?SIMCACHE.p3:0};
+  const q = 1/(2 - Math.min(R().up,100)/100);       // UP 分支长期占比
+  [5,4,3].forEach(rar=>{
+    const arr = state.items.filter(i=>i.rarity===rar);
+    const ups = arr.filter(i=>i.up && wOf(i)>0), offs = arr.filter(i=>!i.up && wOf(i)>0);
+    const Wu = wsum(ups), Wo = wsum(offs);
+    const split = (rar===5 || rar===4) && b.type==='char' && Wu>0 && Wo>0;
+    arr.forEach(i=>{
+      let share;
+      if(wOf(i) <= 0) share = 0;
+      else if(split) share = i.up ? q*wOf(i)/Wu : (1-q)*wOf(i)/Wo;
+      else { const tot = wsum(arr); share = tot>0 ? wOf(i)/tot : 0; }
+      const el = document.querySelector(`[data-wp="${i.id}"]`);
+      if(el) el.innerHTML = wOf(i)<=0
+        ? '<span style="color:#e89a9a">0%</span><i>已禁用</i>'
+        : (share*100).toFixed(1)+'%<i>综合 '+(share*tier[rar]*100).toFixed(2)+'%</i>';
+    });
+    const t = document.querySelector(`[data-wtot="${rar}"]`);
+    if(t) t.textContent = wsum(arr).toFixed(1);
+  });
+}
+function syncWeight(id, from){
+  const it = itemById(id); if(!it) return;
+  const v = wOf(it);
+  const rg = document.querySelector(`[data-w="${id}"]`);
+  const nb = document.querySelector(`[data-wn="${id}"]`);
+  if(rg && from !== 'range'){ rg.max = Math.max(10, Math.ceil(v*2)); rg.value = v; }
+  if(nb && from !== 'number') nb.value = v;
+  updatePcts();
+}
+
+function mgrPoolHTML(){
+  return `
+    <div class="hint">标题与副标题会直接显示在卡池封面上，可自由修改。</div>
+    <div class="tline" style="margin-top:0">活动祈愿</div>
+    <div class="field" style="margin-bottom:10px">
+      <input type="text" id="p1n" value="${esc(state.meta.char.name)}" placeholder="卡池名称">
+    </div>
+    <div class="field" style="margin-bottom:6px">
+      <input type="text" id="p1s" value="${esc(state.meta.char.sub)}" placeholder="副标题说明">
+    </div>
+    <div class="tline">常驻祈愿</div>
+    <div class="field" style="margin-bottom:10px">
+      <input type="text" id="p2n" value="${esc(state.meta.std.name)}" placeholder="卡池名称">
+    </div>
+    <div class="field">
+      <input type="text" id="p2s" value="${esc(state.meta.std.sub)}" placeholder="副标题说明">
+    </div>
+    <div class="tline">保底进度</div>
+    <div class="field">
+      <button class="mini ghost" id="resetPity">重置两个卡池的保底计数</button>
+    </div>`;
+}
+
+/* =========================================================
+   11b. 背景壁纸 / 音效 面板
+   ========================================================= */
+Object.assign(WALL, {
+  /* 面板里的预览图 */
+  mountPanel(){
+    const prev = document.getElementById('wprev');
+    if(!prev) return;
+    const w = state.wall;
+    prev.innerHTML = '';
+    let node = null;
+    if(w.src === 'custom' && w.kind === 'camera' && this.liveStream){
+      node = document.createElement('video');
+      node.srcObject = this.liveStream; node.muted = true; node.autoplay = true; node.playsInline = true;
+    } else if(w.src === 'custom' && this.objUrl){
+      node = document.createElement(w.kind === 'video' ? 'video' : 'img');
+      node.src = this.objUrl;
+      if(node.tagName === 'VIDEO'){ node.muted = true; node.loop = true; node.autoplay = true; node.playsInline = true; }
+    }
+    if(node){
+      node.style.filter    = w.blur ? 'blur(' + w.blur + 'px)' : '';
+      node.style.transform = w.blur ? 'scale(1.07)' : '';
+      prev.appendChild(node);
+      const veil = document.createElement('div');
+      veil.style.cssText = 'position:absolute;inset:0;background:rgba(4,8,18,' + ((w.dim||0)/100) + ')';
+      prev.appendChild(veil);
+      if(node.tagName === 'VIDEO') node.play().catch(()=>{});
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'ph';
+      ph.textContent = '默认背景（深蓝金）';
+      prev.appendChild(ph);
+    }
+  },
+
+  /* 相机面板 */
+  async renderCamBox(){
+    const box = document.getElementById('camBox');
+    if(!box) return;
+    box.innerHTML = `
+      <div class="tline">相机实时预览</div>
+      <div class="camwrap">
+        <video id="camPrev" autoplay muted playsinline style="--mir:${this.camFacing==='user'?-1:1}"></video>
+        <div class="cmsg" id="camMsg">正在请求相机权限…</div>
+      </div>
+      <div class="camrow">
+        <button class="mini" id="camShot">拍照设为背景</button>
+        <button class="mini" id="camLive">用作动态壁纸</button>
+        <button class="mini ghost" id="camFlip">切换前后摄像头</button>
+        <button class="mini ghost" id="camOff">关闭相机</button>
+      </div>
+      <div class="hint" style="margin-top:10px">浏览器若不允许调用相机，可改用「从相册选择」，或点上面的「拍照」按钮调起系统相机。</div>`;
+    const v = document.getElementById('camPrev');
+    const msg = document.getElementById('camMsg');
+    const r = await this.camStart(this.camFacing);
+    const cmsg = document.getElementById('camMsg');
+    if(!r.ok){
+      if(cmsg) cmsg.textContent = r.msg;
+      if(v) v.style.display = 'none';
+    } else {
+      if(cmsg) cmsg.remove();
+      v.srcObject = this.camStream;
+      v.style.setProperty('--mir', this.camFacing === 'user' ? -1 : 1);
+      v.play().catch(()=>{});
+    }
+    const g = id => document.getElementById(id);
+    if(g('camShot')) g('camShot').onclick = async ()=>{
+      SFX.click();
+      const blob = await this.camShot();
+      if(!blob){ toast('拍照失败，请稍后重试'); return; }
+      await this.commit(blob, 'image', '相机拍摄');
+      toast('已使用拍摄的照片作为背景');
+    };
+    if(g('camLive')) g('camLive').onclick = ()=>this.camToWall();
+    if(g('camFlip')) g('camFlip').onclick = async ()=>{
+      this.camFacing = this.camFacing === 'user' ? 'environment' : 'user';
+      await this.renderCamBox();
+    };
+    if(g('camOff')) g('camOff').onclick = ()=>{ this.camStop(); box.innerHTML=''; };
+  }
+});
+
+function mgrWallHTML(){
+  const w = state.wall;
+  const cur = w.src === 'custom' ? (w.name || '自定义背景') : '默认（深蓝金）';
+  const kindTxt = w.kind === 'video' ? '动态壁纸 · 视频' : w.kind === 'camera' ? '动态壁纸 · 实时相机' : '静态图片';
+  return `
+    <div class="hint">
+      背景壁纸完全由你决定：放一张静态图片，或用<b>视频</b>、<b>相机实时画面</b>做动态壁纸。<br>
+      图片与视频保存在本机浏览器中，下次打开自动恢复；<b>相机实时画面只在本次会话有效</b>。
+    </div>
+    <div class="tline" style="margin-top:0">选择来源</div>
+    <div class="wallgrid">
+      <div class="wallcard" data-wact="album"><div class="gi">🖼</div><b>从相册选择</b>
+        <span>打开本机相册 / 文件<br>图片或视频均可</span></div>
+      <div class="wallcard" data-wact="camera"><div class="gi">📷</div><b>调用相机</b>
+        <span>实时预览 · 拍照<br>或直接当动态壁纸</span></div>
+      <div class="wallcard" data-wact="default"><div class="gi">✦</div><b>恢复默认</b>
+        <span>回到原本的<br>深蓝金配色</span></div>
+    </div>
+    <input type="file" id="wallFile" accept="image/*,video/*" style="display:none">
+    <input type="file" id="wallCam" accept="image/*" capture="environment" style="display:none">
+
+    <div class="tline">当前背景：<b style="color:var(--gold-l)">${esc(cur)}</b>
+      <span style="font-size:11px;color:var(--txt-dim);margin-left:8px">${w.src==='custom' ? kindTxt : ''}</span></div>
+    <div class="wprev" id="wprev"><div class="ph">默认背景（深蓝金）</div></div>
+
+    <div class="tline">画面调节</div>
+    <div class="slider"><span>压暗程度</span>
+      <input type="range" id="wDim" min="0" max="90" step="1" value="${w.dim}"><em id="wDimV">${w.dim}%</em></div>
+    <div class="slider"><span>模糊</span>
+      <input type="range" id="wBlur" min="0" max="30" step="1" value="${w.blur}"><em id="wBlurV">${w.blur}px</em></div>
+    <div class="field" style="margin-top:12px">
+      <button class="mini ghost" id="wFit">填充方式：${w.fit==='cover'?'铺满裁切':'完整显示'}</button>
+      <button class="mini ghost" id="wVig">暗角：${w.vig?'开':'关'}</button>
+      <button class="mini ghost" id="wKb">缓慢缩放：${w.kb?'开':'关'}</button>
+    </div>
+    <div id="camBox"></div>`;
+}
+
+function mgrAudioHTML(){
+  const a = state.audio;
+  return `
+    <div class="hint">抽卡动画的音效全部实时合成，不依赖任何外部音频文件。想让动画安静下来，可以直接关掉。</div>
+    <div class="field" style="margin-top:6px">
+      <label class="chk"><input type="checkbox" id="auOn" ${a.on!==false?'checked':''}>开启音效</label>
+      <button class="mini ghost" id="auTest">试听音效</button>
+    </div>
+    <div class="slider" style="margin-top:14px"><span>音量</span>
+      <input type="range" id="auVol" min="0" max="100" step="1" value="${a.vol}"><em id="auVolV">${a.vol}%</em></div>
+    <div class="hint" style="margin-top:14px">音效顺序对应动画：低频蓄势 → 白光冲刷 → 云涡流转 → 流星破空 → 光柱爆发 → 揭示重击 → 余韵。</div>`;
+}
+
+function mgrBtnHTML(){
+  const pct = Math.round(state.btn.scale * 100);
+  const s = state.btn.skin;
+  const cur = s.on ? (s.name || '自定义皮肤') : '默认（薄荷奶绿横幅）';
+  return `
+    <div class="hint">右下角的「祈愿·1」横幅可以整体放大缩小，边框上趴着的小家伙会跟着一起变。</div>
+    <div class="slider" style="margin-top:16px"><span>按钮尺寸</span>
+      <input type="range" id="btnSize" min="60" max="150" step="5" value="${pct}"><em id="btnSizeV">${pct}%</em></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+      <button class="mini ghost" data-bsz="75">小 75%</button>
+      <button class="mini ghost" data-bsz="100">标准 100%</button>
+      <button class="mini ghost" data-bsz="125">大 125%</button>
+      <button class="mini" data-bsz="100">恢复默认</button>
+    </div>
+    <div class="hint" style="margin-top:16px">可调范围 60%–150%。按钮变大后若与底部说明文字挤到一处，说明文字会自动让位；窄屏时整体上移。</div>
+
+    <div class="tline">按钮皮肤</div>
+    <div class="hint" style="margin-top:0">可以让横幅换上你自己的图片：从相册挑一张，或用相机现拍一张。
+      图片只保存在本机浏览器里，下次打开自动恢复；换回「默认皮肤」即还原成薄荷奶绿横幅。</div>
+    <div class="wallgrid">
+      <div class="wallcard" data-bsk="album"><div class="gi">🖼</div><b>从相册选择</b>
+        <span>打开本机相册 / 文件<br>挑一张图片当皮肤</span></div>
+      <div class="wallcard" data-bsk="camera"><div class="gi">📷</div><b>调用相机</b>
+        <span>实时预览 · 拍照<br>直接设为按钮皮肤</span></div>
+      <div class="wallcard" data-bsk="default"><div class="gi">✦</div><b>默认皮肤</b>
+        <span>回到原本的<br>薄荷奶绿横幅</span></div>
+    </div>
+    <input type="file" id="skinFile" accept="image/*" style="display:none">
+    <input type="file" id="skinCam" accept="image/*" capture="environment" style="display:none">
+
+    <div class="tline">当前皮肤：<b style="color:var(--gold-l)" id="skCur">${esc(cur)}</b></div>
+    <div class="wprev" id="skprev" style="aspect-ratio:404/96"><div class="ph">默认皮肤（薄荷奶绿横幅）</div></div>
+    <div id="skinCamBox"></div>
+
+    <div class="field" style="margin-top:14px">
+      <button class="mini ghost" id="skFit">填充方式：${s.fit==='cover'?'铺满裁切':'完整显示'}</button>
+      <button class="mini ghost" id="skRatio">贴合图片比例：${s.ratio?'开':'关'}</button>
+      <label class="chk"><input type="checkbox" id="skText" ${s.text?'checked':''}>叠加按钮文字</label>
+      <label class="chk"><input type="checkbox" id="skChibi" ${s.chibi?'checked':''}>叠加小角色</label>
+    </div>
+    <div class="slider"><span>压暗程度</span>
+      <input type="range" id="skDim" min="0" max="70" step="1" value="${s.dim}"><em id="skDimV">${s.dim}%</em></div>
+    <div class="slider"><span>圆角</span>
+      <input type="range" id="skRadius" min="0" max="30" step="1" value="${s.radius}"><em id="skRadiusV">${s.radius}px</em></div>
+    <div class="hint" style="margin-top:14px">「贴合图片比例」会让按钮高度按图片宽高比自动调整，免得把竖图裁成细条；
+      不勾选则保持原来的宽横幅比例。压暗程度用来给按钮上的白字垫底，照片越花建议调得越高。<br>
+      <b>图片本身已经带「祈愿」字样或图案时，请把「叠加按钮文字 / 叠加小角色」都关掉</b>，否则会和图片重叠、
+      看起来像两张图糊在一起；换上整张按钮图时会自动帮你关。</div>`;
+}
+
+/* —— 管理面板交互（事件委托，只绑定一次）—— */
+function bindManager(){
+  const body = document.getElementById('mBody');
+
+  body.addEventListener('click', e=>{
+    const t = e.target;
+
+    if(t.id==='qAdd'){
+      const name = (document.getElementById('qName').value||'').trim();
+      if(!name){ toast('请输入名称'); return; }
+      state.items.push({ id:uid(), name,
+        rarity:+document.getElementById('qRar').value,
+        tag:(document.getElementById('qTag').value||'').trim(),
+        up:document.getElementById('qUp').checked, weight:1 });
+      save(); paintManager(); renderBanner(); toast('已添加：'+name); return;
+    }
+    if(t.id==='bulkAdd'){
+      const raw = document.getElementById('bulkText').value||'';
+      const list = parseBulk(raw);
+      if(!list.length){ toast('没有解析到有效内容'); return; }
+      if(document.getElementById('bulkClear').checked) state.items = [];
+      state.items.push(...list);
+      save(); renderBanner(); toast(`已导入 ${list.length} 个对象`);
+      mTab='list'; paintManager(); return;
+    }
+    if(t.id==='demoBtn'||t.id==='demoBtn2'){ loadDemo(); return; }
+    if(t.id==='clrBtn'){
+      if(!state.items.length) return;
+      if(!confirm('确定清空全部抽卡对象？')) return;
+      state.items = []; save(); paintManager(); renderBanner(); toast('已清空对象'); return;
+    }
+    if(t.id==='resetPity'){
+      BANNERS.forEach(b=>{ state.pity[b.id]={c5:0,c4:0,guar5:false,guar4:false}; });
+      save(); renderBanner(); toast('保底计数已重置'); return;
+    }
+    if(t.id==='rateReset'){
+      state.rates = Object.assign({}, RATES_DEFAULT);
+      save(); paintManager(); toast('已恢复默认概率'); return;
+    }
+    /* —— 背景壁纸面板 —— */
+    if(t.dataset && t.dataset.wact){
+      SFX.init(); SFX.resume(); SFX.click();
+      const a = t.dataset.wact;
+      if(a==='album'){ WALL.pick('album'); return; }
+      if(a==='camera'){ WALL.renderCamBox(); return; }
+      if(a==='default'){ WALL.reset(); toast('已恢复默认背景'); return; }
+    }
+    /* —— 按钮皮肤 —— */
+    if(t.dataset && t.dataset.bsk){
+      SFX.init(); SFX.resume(); SFX.click();
+      const a = t.dataset.bsk;
+      if(a==='album'){ BSKIN.pick('album'); return; }
+      if(a==='camera'){ BSKIN.renderCamBox(); return; }
+      if(a==='default'){ BSKIN.reset(); return; }
+    }
+    if(t.id==='skFit'){
+      state.btn.skin.fit = state.btn.skin.fit === 'cover' ? 'contain' : 'cover';
+      BSKIN.apply(); save(); BSKIN.mountPanel();
+      /* 只改这一行按钮自己的文案，不整块重绘面板——重绘会把正在预览的相机框清掉 */
+      t.textContent = '填充方式：' + (state.btn.skin.fit === 'cover' ? '铺满裁切' : '完整显示');
+      return;
+    }
+    if(t.id==='skRatio'){
+      state.btn.skin.ratio = !state.btn.skin.ratio;
+      BSKIN.apply(); save(); BSKIN.mountPanel();
+      t.textContent = '贴合图片比例：' + (state.btn.skin.ratio ? '开' : '关');
+      return;
+    }
+    if(t.id==='wFit'){
+      state.wall.fit = state.wall.fit === 'cover' ? 'contain' : 'cover';
+      save(); WALL.paint(); WALL.mountPanel(); paintManager(); return;
+    }
+    if(t.id==='wVig'){ state.wall.vig = !state.wall.vig; save(); WALL.paint(); WALL.mountPanel(); paintManager(); return; }
+    if(t.id==='wKb'){ state.wall.kb = !state.wall.kb; save(); WALL.paint(); WALL.mountPanel(); paintManager(); return; }
+    if(t.id==='auTest'){
+      SFX.init(); SFX.resume();
+      SFX.sparkle(2400, 0.09, 1.6); SFX.sparkle(3220, 0.06, 1.9);
+      toast('音效试听'); return;
+    }
+    /* —— 「祈愿」按钮尺寸预设 —— */
+    if(t.dataset && t.dataset.bsz){
+      SFX.init(); SFX.resume(); SFX.click();
+      state.btn.scale = clampBtnScale(+t.dataset.bsz / 100);
+      applyBtnScale(); save(); paintManager();
+      toast('按钮尺寸 ' + Math.round(state.btn.scale * 100) + '%'); return;
+    }
+    if(t.dataset && t.dataset.avg){
+      const rar = +t.dataset.avg;
+      const arr = state.items.filter(i=>i.rarity===rar);
+      if(!arr.length) return;
+      arr.forEach(i=>i.weight = 1);
+      save(); paintManager(); toast(`${rar} 星对象权重已均分`); return;
+    }
+
+    const row = t.closest('.irow');
+    if(row){
+      const it = itemById(row.dataset.id);
+      if(!it) return;
+      if(t.dataset.f==='up'){ it.up = !it.up; save(); paintManager(); renderBanner(); return; }
+      if(t.dataset.f==='del'){ state.items = state.items.filter(x=>x.id!==it.id); save(); paintManager(); renderBanner(); return; }
+    }
+  });
+
+  body.addEventListener('change', e=>{
+    const el = e.target;
+    if(el.id === 'wallFile' || el.id === 'wallCam'){
+      const f = el.files && el.files[0];
+      if(f) WALL.useFile(f);
+      el.value = '';
+      return;
+    }
+    if(el.id === 'skinFile' || el.id === 'skinCam'){
+      const f = el.files && el.files[0];
+      if(f) BSKIN.useFile(f);
+      el.value = '';
+      return;
+    }
+    if(el.id === 'skText'){
+      state.btn.skin.text = el.checked; BSKIN.apply(); save();
+      toast(el.checked ? '已在皮肤上叠加按钮文字' : '不再叠加按钮文字'); return;
+    }
+    if(el.id === 'skChibi'){
+      state.btn.skin.chibi = el.checked; BSKIN.apply(); save();
+      toast(el.checked ? '已在皮肤上叠加小角色' : '不再叠加小角色'); return;
+    }
+    if(el.id === 'auOn'){
+      state.audio.on = el.checked; SFX.init(); SFX.setVol(); save();
+      toast(el.checked ? '已开启音效' : '已关闭音效');
+      return;
+    }
+    const row = el.closest('.irow');
+    if(!row) return;
+    const it = itemById(row.dataset.id); if(!it) return;
+    if(e.target.dataset.f==='rarity'){
+      it.rarity = +e.target.value; save(); paintManager(); renderBanner();
+    }
+  });
+
+  body.addEventListener('focusout', e=>{
+    const f = e.target.dataset && e.target.dataset.f;
+    if(f==='name' || f==='tag'){
+      const row = e.target.closest('.irow'); if(!row) return;
+      const it = itemById(row.dataset.id); if(!it) return;
+      const v = (e.target.textContent||'').trim();
+      if(f==='name'){
+        if(!v){ e.target.textContent = it.name; toast('名称不能为空'); return; }
+        it.name = v.slice(0,20);
+      } else it.tag = v.slice(0,12);
+      save(); renderBanner();
+    }
+  });
+
+  body.addEventListener('input', e=>{
+    const el = e.target;
+
+    /* —— 壁纸调节滑块 —— */
+    if(el.id === 'wDim' || el.id === 'wBlur'){
+      if(el.id === 'wDim'){
+        state.wall.dim = Math.max(0, Math.min(90, +el.value));
+        const l = document.getElementById('wDimV'); if(l) l.textContent = state.wall.dim + '%';
+      } else {
+        state.wall.blur = Math.max(0, Math.min(30, +el.value));
+        const l = document.getElementById('wBlurV'); if(l) l.textContent = state.wall.blur + 'px';
+      }
+      WALL.paint();
+      const pv = document.querySelector('#wprev video, #wprev img');
+      if(pv){
+        pv.style.filter    = state.wall.blur ? 'blur(' + state.wall.blur + 'px)' : '';
+        pv.style.transform = state.wall.blur ? 'scale(1.07)' : '';
+      }
+      const ov = document.querySelector('#wprev > div');
+      if(ov) ov.style.background = 'rgba(4,8,18,' + (state.wall.dim/100) + ')';
+      save(); return;
+    }
+    /* —— 音量滑块 —— */
+    if(el.id === 'auVol'){
+      state.audio.vol = Math.max(0, Math.min(100, +el.value));
+      const l = document.getElementById('auVolV'); if(l) l.textContent = state.audio.vol + '%';
+      SFX.init(); SFX.setVol(); save(); return;
+    }
+    /* —— 按钮皮肤滑块 —— */
+    if(el.id === 'skDim'){
+      state.btn.skin.dim = Math.max(0, Math.min(70, +el.value));
+      const l = document.getElementById('skDimV'); if(l) l.textContent = state.btn.skin.dim + '%';
+      BSKIN.apply(); BSKIN.mountPanel(); save(); return;
+    }
+    if(el.id === 'skRadius'){
+      state.btn.skin.radius = Math.max(0, Math.min(30, +el.value));
+      const l = document.getElementById('skRadiusV'); if(l) l.textContent = state.btn.skin.radius + 'px';
+      BSKIN.apply(); BSKIN.mountPanel(); save(); return;
+    }
+    /* —— 「祈愿」按钮尺寸滑块 —— */
+    if(el.id === 'btnSize'){
+      state.btn.scale = clampBtnScale(+el.value / 100);
+      const l = document.getElementById('btnSizeV'); if(l) l.textContent = Math.round(state.btn.scale * 100) + '%';
+      applyBtnScale(); save(); return;
+    }
+
+    /* 卡池标题 */
+    if(['p1n','p1s','p2n','p2s'].includes(el.id)){
+      const map = {p1n:['char','name'], p1s:['char','sub'], p2n:['std','name'], p2s:['std','sub']};
+      const [bk,fk] = map[el.id];
+      state.meta[bk][fk] = el.value;
+      save(); renderBanner(); return;
+    }
+
+    /* 全局概率 */
+    if(el.dataset && el.dataset.rate){
+      const k = el.dataset.rate;
+      let v = parseFloat(el.value);
+      if(!isFinite(v)) v = 0;
+      v = Math.max(0, v);
+      state.rates[k] = v;
+      save(); updateSim(); return;
+    }
+
+    /* 对象权重 */
+    if(el.dataset && (el.dataset.w || el.dataset.wn)){
+      const id = el.dataset.w || el.dataset.wn;
+      const it = itemById(id); if(!it) return;
+      let v = parseFloat(el.value);
+      if(!isFinite(v) || v < 0) v = 0;
+      it.weight = v;
+      syncWeight(id, el.dataset.w ? 'range' : 'number');
+      save(); return;
+    }
+  });
+}
+
+function parseBulk(raw){
+  const out = [];
+  raw.split(/\r?\n/).forEach(line=>{
+    let s = line.trim();
+    if(!s) return;
+    const parts = s.split(/[,，\t]+|\s{2,}|\s+(?=\d)/).map(x=>x.trim()).filter(Boolean);
+    let name = parts[0]||'';
+    let rar = 3, tag = '', up = false;
+    for(let i=1;i<parts.length;i++){
+      const seg = parts[i];
+      if(/^[345]$/.test(seg)) rar = +seg;
+      else if(/^(up|UP|Up)$/.test(seg)) up = true;
+      else if(/^[★]{3,5}$/.test(seg)) rar = seg.length;
+      else tag = tag ? tag + ' ' + seg : seg;
+    }
+    // 兼容 "名称 5" 这种两段式
+    if(parts.length === 1 && /\s/.test(s)){
+      const m = s.match(/^(.*?)\s+([345])\s*$/);
+      if(m){ name = m[1].trim(); rar = +m[2]; }
+    }
+    name = name.slice(0,20); tag = tag.slice(0,12);
+    if(!name) return;
+    out.push({id:uid(), name, rarity:rar, tag, up, weight:1});
+  });
+  return out;
+}
+function loadDemo(){
+  if(state.items.length && !confirm('将追加一批示例对象，继续？')) return;
+  const demo = [
+    {n:'星轨之约', r:5, t:'角色', u:true},
+    {n:'白夜行者', r:5, t:'角色', u:false},
+    {n:'终末回响', r:5, t:'武器', u:false},
+    {n:'晨曦剑士', r:4, t:'角色', u:true},
+    {n:'雾岚游侠', r:4, t:'角色', u:true},
+    {n:'归墟之刃', r:4, t:'武器', u:false},
+    {n:'碎星法典', r:4, t:'武器', u:false},
+    {n:'苍苔之护', r:4, t:'防具', u:false},
+    {n:'普通补给', r:3, t:'道具', u:false},
+    {n:'精铁碎片', r:3, t:'材料', u:false},
+    {n:'旧日笔记', r:3, t:'材料', u:false},
+    {n:'银币袋',   r:3, t:'道具', u:false},
+  ];
+  demo.forEach(d=>state.items.push({id:uid(), name:d.n, rarity:d.r, tag:d.t, up:d.u, weight:1}));
+  save(); renderBanner();
+  if(mTab) paintManager();
+  toast('已载入示例对象');
+}
+
+/* =========================================================
+   12. 启动
+   ========================================================= */
+function boot(){
+  load();
+  FX.init(); RV.init(); bindManager();
+  renderBanner();
+  WALL.boot();
+  BSKIN.boot();
+  /* 套用用户设定的按钮倍率，并让页脚按按钮实际占位避让 */
+  applyBtnScale();
+  window.addEventListener('load', applyBtnScale);
+  let _rzT = 0;
+  window.addEventListener('resize', ()=>{ clearTimeout(_rzT); _rzT = setTimeout(applyBtnScale, 120); });
+
+  const bind = (id, fn)=>{ const el = document.getElementById(id); if(el) el.onclick = fn; };
+  bind('p1',      ()=>{ SFX.init(); SFX.resume(); SFX.click(); startPull(1); });
+  bind('mgrTop',  ()=>{ SFX.init(); SFX.resume(); SFX.click(); openManager('list'); });
+  bind('histTop', ()=>{ SFX.init(); SFX.resume(); SFX.click(); openHistory(); });
+  bind('hintAdd', ()=>{ SFX.init(); SFX.resume(); SFX.click(); openManager('list'); });
+  bind('bgBtn',   ()=>{ SFX.init(); SFX.resume(); openManager('wall'); });
+
+  document.getElementById('skipBtn').onclick = e=>{ e.stopPropagation(); FX.skip(); };
+  FX.layer.addEventListener('pointerdown', ()=>FX.skip());
+  document.getElementById('mClose').onclick = closeModal;
+  document.getElementById('mask').onclick = e=>{ if(e.target.id==='mask') closeModal(); };
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape') closeModal();
+    if(e.key === ' ' && FX.busy){ e.preventDefault(); FX.skip(); }
+  });
+  /* 浏览器要求首次用户手势后才能出声 */
+  const unlock = ()=>{ SFX.init(); SFX.resume(); document.removeEventListener('pointerdown', unlock); };
+  document.addEventListener('pointerdown', unlock);
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden && FX.busy) SFX.padOff(0.2); });
+
+  save();
+}
+document.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>

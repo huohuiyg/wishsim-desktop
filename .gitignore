@@ -1,0 +1,15 @@
+# --- build artifacts ---
+node_modules/
+dist/
+
+# --- Rust / Tauri ---
+src-tauri/target/
+src-tauri/gen/
+
+# --- local toolchain (此项目在无管理员权限的机器上自建的工具链，不要提交) ---
+/toolchain/
+
+# --- misc ---
+*.log
+.DS_Store
+Thumbs.db

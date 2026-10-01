@@ -1,0 +1,21 @@
+# ============================================================
+#  祈愿 · Wish Simulator  Windows 构建配置
+# ------------------------------------------------------------
+#  背景：本机没有安装 Visual Studio / MSVC 构建工具，且当前用户
+#        没有管理员权限去安装它。因此统一使用 Rust 官方的
+#        x86_64-pc-windows-gnu 工具链来做 Windows 目标构建。
+#
+#  链接器直接用 Rust 工具链自带的 rust-lld：
+#  它配合 std 里 lib/rustlib/x86_64-pc-windows-gnu/lib/self-contained/
+#  内置的 MinGW 运行时库（crt2.o / libmingw32.a / libkernel32.a …）
+#  就能完成链接，无需额外安装 MinGW 的 gcc。
+#
+#  注意：资源文件（图标 / 清单）仍需要 binutils 的 windres，
+#        由 MinGW-w64 提供，构建时通过 PATH 找到即可。
+# ============================================================
+[target.x86_64-pc-windows-gnu]
+linker = "D:/toolchain/rust/rustup/toolchains/stable-x86_64-pc-windows-gnu/lib/rustlib/x86_64-pc-windows-gnu/bin/rust-lld.exe"
+rustflags = [
+  "-Clink-self-contained=yes",       # 使用工具链自带的 MinGW 运行时库
+  "-Ctarget-feature=+crt-static",    # 静态链接 C 运行时，产物免装运行库
+]

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "祈愿",
+  "version": "1.0.0",
+  "identifier": "com.wishsim.desktop",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "祈愿 · Wish Simulator",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 660,
+        "resizable": true,
+        "center": true,
+        "decorations": true,
+        "backgroundColor": "#0b1020"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "publisher": "Wish Simulator",
+    "category": "Game",
+    "shortDescription": "祈愿 · Wish Simulator",
+    "longDescription": "原神风格的抽卡 / 祈愿模拟器。支持概率自定义、完整抽卡动画、自定义壁纸（图片 / 视频 / 相机）与按钮皮肤。",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "wishsim-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "祈愿 · Wish Simulator 桌面端（Tauri v2 外壳）",
+  "scripts": {
+    "sync": "node sync-dist.mjs",
+    "dev": "tauri dev",
+    "build": "node build.mjs",
+    "build:app": "node build.mjs --no-bundle"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

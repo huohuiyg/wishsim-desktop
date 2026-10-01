@@ -1,0 +1,99 @@
+name: Build Windows installer
+
+# 触发方式：
+#   1. 手动（Actions 页面点 Run workflow）
+#   2. push 到 main 且改动涉及打包相关文件
+#   3. 打 tag（v*）时自动构建并把安装包挂到 Release
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src-tauri/**'
+      - 'dist/**'
+      - 'index.html'
+      - 'build.mjs'
+      - 'package.json'
+      - '.github/workflows/build.yml'
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Tauri build (windows-gnu, NSIS)
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    # GitHub runner 直连 GitHub Releases 很顺，无需镜像；显式置空以防本机导出的变量带过来
+    env:
+      TAURI_BUNDLER_TOOLS_GITHUB_MIRROR_TEMPLATE: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install npm deps (@tauri-apps/cli)
+        run: npm install
+
+      - name: Setup Rust (GNU host toolchain)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+          # 关键：host 也必须是 GNU，Tauri 的 winres 资源编译才会走 windres 分支
+          toolchain: stable-x86_64-pc-windows-gnu
+
+      - name: Install MinGW binutils (windres)
+        shell: pwsh
+        run: |
+          $bin = "C:\ProgramData\mingw64\mingw64\bin"
+          if (-not (Test-Path "$bin\windres.exe")) {
+            choco install mingw --no-progress -y
+          }
+          echo $bin >> $env:GITHUB_PATH
+          & "$bin\windres.exe" --version
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            src-tauri/target
+          key: ${{ runner.os }}-gnu-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gnu-cargo-
+
+      - name: Sync frontend into dist/
+        run: |
+          if [ -f index.html ]; then mkdir -p dist && cp index.html dist/index.html; fi
+          ls -la dist/
+
+      - name: Build Tauri app + NSIS installer
+        run: npx tauri build
+        working-directory: src-tauri
+
+      - name: Upload artifacts (exe + installer)
+        uses: actions/upload-artifact@v4
+        with:
+          name: wish-simulator-windows
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/wish-sim-desktop.exe
+            src-tauri/target/release/bundle/nsis/*.exe
+
+      - name: Attach installer to Release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: src-tauri/target/release/bundle/nsis/*.exe
+          draft: false

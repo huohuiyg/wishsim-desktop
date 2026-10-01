@@ -1,0 +1,22 @@
+[package]
+name = "wish-sim-desktop"
+version = "1.0.0"
+description = "祈愿 · Wish Simulator —— 桌面端外壳"
+authors = ["Wish Simulator"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+# 为体积/速度做的发布配置
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+incremental = false
