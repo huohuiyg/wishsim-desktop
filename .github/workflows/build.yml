@@ -27,9 +27,11 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
 
-    # GitHub runner 直连 GitHub Releases 很顺，无需镜像；显式置空以防本机导出的变量带过来
-    env:
-      TAURI_BUNDLER_TOOLS_GITHUB_MIRROR_TEMPLATE: ""
+    # 注意：这里**不要**定义 TAURI_BUNDLER_TOOLS_GITHUB_MIRROR_TEMPLATE。
+    # GitHub runner 直连 GitHub Releases 很顺，本就用不到镜像；
+    # 而把它设成空字符串会被 Tauri 当成一个 URL 解析，报
+    # `failed to bundle project: http: empty string`。
+    # 本机需要用镜像时，只在本机的 build.mjs 里注入即可。
 
     steps:
       - name: Checkout
