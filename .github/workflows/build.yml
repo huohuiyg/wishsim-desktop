@@ -74,9 +74,11 @@ jobs:
             ${{ runner.os }}-gnu-cargo-
 
       - name: Sync frontend into dist/
+        shell: pwsh
         run: |
-          if [ -f index.html ]; then mkdir -p dist && cp index.html dist/index.html; fi
-          ls -la dist/
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          if (Test-Path index.html) { Copy-Item index.html dist/index.html -Force }
+          Get-ChildItem dist | Select-Object Name, Length
 
       - name: Build Tauri app + NSIS installer
         run: npx tauri build
