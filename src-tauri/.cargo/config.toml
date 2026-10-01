@@ -1,20 +1,19 @@
 # ============================================================
 #  祈愿 · Wish Simulator  Windows 构建配置
 # ------------------------------------------------------------
-#  背景：本机没有安装 Visual Studio / MSVC 构建工具，且当前用户
-#        没有管理员权限去安装它。因此统一使用 Rust 官方的
-#        x86_64-pc-windows-gnu 工具链来做 Windows 目标构建。
+#  统一使用 Rust 官方的 x86_64-pc-windows-gnu 工具链构建，
+#  不依赖 Visual Studio / MSVC。
 #
-#  链接器直接用 Rust 工具链自带的 rust-lld：
-#  它配合 std 里 lib/rustlib/x86_64-pc-windows-gnu/lib/self-contained/
-#  内置的 MinGW 运行时库（crt2.o / libmingw32.a / libkernel32.a …）
-#  就能完成链接，无需额外安装 MinGW 的 gcc。
+#  ⚠️ 这里**故意不写 linker 路径**：
+#     `linker` 是机器相关配置，写死绝对路径会让 CI（GitHub Actions）
+#     或换一台机器直接报 `linker "D:/..." not found`。
+#     - 本机（只装了 binutils、没有 gcc）：由 `build.mjs` 注入
+#       RUSTFLAGS 指向工具链自带的 rust-lld（自包含链接）。
+#     - CI：由 choco 安装的 MinGW 的 `gcc` 担任链接器（默认行为）。
 #
-#  注意：资源文件（图标 / 清单）仍需要 binutils 的 windres，
-#        由 MinGW-w64 提供，构建时通过 PATH 找到即可。
+#  这里只保留与机器无关的 rustflags。
 # ============================================================
 [target.x86_64-pc-windows-gnu]
-linker = "D:/toolchain/rust/rustup/toolchains/stable-x86_64-pc-windows-gnu/lib/rustlib/x86_64-pc-windows-gnu/bin/rust-lld.exe"
 rustflags = [
   "-Clink-self-contained=yes",       # 使用工具链自带的 MinGW 运行时库
   "-Ctarget-feature=+crt-static",    # 静态链接 C 运行时，产物免装运行库

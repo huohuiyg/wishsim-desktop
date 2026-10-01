@@ -59,11 +59,20 @@ const GH_MIRROR_TEMPLATE = process.env.TAURI_BUNDLER_TOOLS_GITHUB_MIRROR_TEMPLAT
   || process.env.GH_MIRROR_TEMPLATE
   || 'https://gh-proxy.com/https://github.com/<owner>/<repo>/releases/download/<version>/<asset>';
 
+// 本机没有 gcc，链接器用 Rust 工具链自带的 rust-lld（自包含链接）。
+// 这条**不写进** src-tauri/.cargo/config.toml —— 那是机器无关的文件，
+// 写死绝对路径会让 CI / 其他机器直接报 `linker ... not found`。
+// 所以改在这里用环境变量注入（只对本机构建生效）。
+const RUST_LLD = process.env.RUST_LLD
+  || 'D:\\toolchain\\rust\\rustup\\toolchains\\stable-x86_64-pc-windows-gnu\\lib\\rustlib\\x86_64-pc-windows-gnu\\bin\\rust-lld.exe';
+
 const env = Object.assign({}, process.env, {
   RUSTUP_HOME,
   CARGO_HOME,
   CARGO_TERM_COLOR: 'always',
   TAURI_BUNDLER_TOOLS_GITHUB_MIRROR_TEMPLATE: GH_MIRROR_TEMPLATE,
+  // 让 cargo 用 rust-lld 当链接器（等价于 config.toml 里的 linker=…）
+  CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: RUST_LLD,
   PATH: [RCPP_BIN, TOOLCHAIN_BIN, MINGW_BIN, NODE_BIN, process.env.PATH].join(';'),
 });
 
