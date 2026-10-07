@@ -92,12 +92,33 @@ jobs:
           # bundle 默认按 productName 命名（中文「祈愿_1.0.0_x64-setup.exe」）。
           # 中文名在 Release 资源 / 部分下载器上会被截断或转义，统一改成 ASCII：
           #   去掉开头的产品名部分，前缀换成 WishSimulator。
+          #
+          # 注意：target/ 会从 cargo 缓存里还原，里面可能残留**上一个版本**的
+          # WishSimulator_*.exe。所以这里绝不能对目录做 `WishSimulator_*` 通配，
+          # 否则会把旧包一起当成产物上传到 Release（踩过一次：
+          # v1.1.0 里混进了 WishSimulator_1.0.0_x64-setup.exe）。
+          # 只认「本次构建刚生成的那个中文名文件」，其余一律清掉。
           $dir = "src-tauri/target/release/bundle/nsis"
-          Get-ChildItem "$dir/*.exe" -Exclude "WishSimulator_*" | ForEach-Object {
-            $suffix = ($_.Name -replace '^[^_]*_', '')   # 去掉「祈愿_」
+          $ver = (Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json).version
+          Write-Host "building version: $ver"
+
+          # 清掉缓存带过来的旧产物，避免污染
+          Get-ChildItem "$dir/*.exe" -ErrorAction SilentlyContinue | Remove-Item -Force
+
+          # 本次构建的中文名产物（productName 是中文，故按「不含 WishSimulator」筛）
+          $fresh = Get-ChildItem "$dir/*.exe" -ErrorAction SilentlyContinue |
+                   Where-Object { $_.Name -notlike "WishSimulator_*" }
+          if (-not $fresh) {
+            Write-Error "没找到本次构建的安装包，目录内容："
+            Get-ChildItem $dir -ErrorAction SilentlyContinue | Select-Object Name, Length
+            exit 1
+          }
+          foreach ($f in $fresh) {
+            $suffix = ($f.Name -replace '^[^_]*_', '')   # 去掉「祈愿_」
             $dest = Join-Path $dir "WishSimulator_$suffix"
-            Copy-Item $_.FullName $dest -Force
-            Write-Host "renamed: $($_.Name) -> WishSimulator_$suffix"
+            Copy-Item $f.FullName $dest -Force
+            Remove-Item $f.FullName -Force               # 中文名那份删掉，只留 ASCII
+            Write-Host "renamed: $($f.Name) -> WishSimulator_$suffix"
           }
           Get-ChildItem "$dir/*.exe" | Select-Object Name, Length
 
