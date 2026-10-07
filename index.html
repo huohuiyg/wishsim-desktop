@@ -472,6 +472,18 @@ textarea{width:100%;min-height:180px;line-height:1.85;resize:vertical;font-size:
   border-left:2px solid rgba(211,188,142,.4);padding:10px 13px;border-radius:0 3px 3px 0;margin-bottom:12px}
 .hint code{background:rgba(0,0,0,.4);padding:1px 5px;border-radius:2px;color:var(--gold-l);font-size:11.5px}
 
+/* 数据导入 / 导出 */
+.dpsum{border:1px solid rgba(211,188,142,.2);border-radius:5px;overflow:hidden;background:rgba(6,10,20,.5)}
+.dpsum>div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 14px;
+  font-size:12.5px;border-bottom:1px solid rgba(255,255,255,.055)}
+.dpsum>div:last-child{border-bottom:none}
+.dpsum>div>span{color:var(--txt-dim);letter-spacing:.5px;flex:0 0 auto}
+.dpsum>div>b{color:#e8dcbc;font-weight:600;text-align:right;word-break:break-all}
+.dpchip{display:inline-block;padding:1px 9px;border-radius:99px;font-size:11px;
+  background:rgba(255,255,255,.05);color:var(--txt-dim);border:1px solid rgba(255,255,255,.09)}
+.dpchip.on{background:rgba(211,188,142,.14);color:var(--gold-l);border-color:rgba(211,188,142,.42)}
+#dpConfirm .dpsum{margin-bottom:2px}
+
 /* item list */
 .ilist{border:1px solid rgba(211,188,142,.18);border-radius:4px;overflow:hidden}
 .ihead,.irow{display:grid;grid-template-columns:78px 1fr 1fr 62px 36px;gap:8px;align-items:center;padding:8px 12px}
@@ -1931,6 +1943,354 @@ const BSKIN = {
 };
 
 /* =========================================================
+   5c. 数据导入 / 导出（整机备份）
+   ---------------------------------------------------------
+   导出一个 .wishbackup 单文件（本质是 JSON）：既含 localStorage 里的
+   全部配置，也把 IndexedDB 里的壁纸 / 按钮皮肤二进制转成 base64 内嵌，
+   所以「换一台电脑」也能把整个状态原样搬过去。
+
+   导入前会做一遍结构校验，再让用户选「覆盖」还是「合并」。
+   ========================================================= */
+const DATA_VER = 1;                 /* 备份格式版本 */
+const DATA_EXT = '.wishbackup';     /* 自定义后缀，避免被当成普通 json 误开 */
+
+const DataPort = {
+  /* ---------- blob <-> base64 ---------- */
+  blobToB64(blob){
+    return new Promise((res, rej)=>{
+      const fr = new FileReader();
+      fr.onload  = ()=>{ const s = String(fr.result||''); res(s.slice(s.indexOf(',')+1)); };
+      fr.onerror = ()=>rej(fr.error);
+      fr.readAsDataURL(blob);
+    });
+  },
+  b64ToBlob(b64, type){
+    try{
+      const bin = atob(b64);
+      const len = bin.length;
+      const u8  = new Uint8Array(len);
+      for(let i=0;i<len;i++) u8[i] = bin.charCodeAt(i);
+      return new Blob([u8], { type: type || 'application/octet-stream' });
+    }catch(e){ return null; }
+  },
+
+  /* ---------- 打包：把当前全部数据收成一个对象 ---------- */
+  async pack(){
+    const d = JSON.parse(JSON.stringify({
+      items:   state.items,
+      rates:   state.rates,
+      meta:    state.meta,
+      owned:   state.owned,
+      history: state.history,
+      stats:   state.stats,
+      pity:    state.pity,
+      banner:  state.banner,
+      wall:    state.wall,
+      audio:   state.audio,
+      btn:     state.btn,
+    }));
+
+    const assets = {};
+
+    /* 自定义壁纸二进制（camera 类型本来就跨不了会话，不导） */
+    if(state.wall.src === 'custom' && state.wall.kind !== 'camera'){
+      const rec = await WALL.get('current');
+      if(rec && rec.blob){
+        assets.wall = {
+          b64:  await this.blobToB64(rec.blob),
+          type: rec.blob.type || (rec.kind === 'video' ? 'video/mp4' : 'image/jpeg'),
+          kind: rec.kind || state.wall.kind || 'image',
+        };
+      }
+    }
+
+    /* 按钮皮肤图片 */
+    if(state.btn.skin && state.btn.skin.on){
+      const rec = await WALL.get('btnskin');
+      if(rec && rec.blob){
+        assets.btnSkin = { b64: await this.blobToB64(rec.blob), type: rec.blob.type || 'image/png' };
+      }
+    }
+
+    return {
+      app: 'wish-simulator',
+      ver: DATA_VER,
+      at:  new Date().toISOString(),
+      ua:  navigator.userAgent,
+      size: JSON.stringify(d).length,
+      hasAssets: Object.keys(assets).length > 0,
+      data: d,
+      assets,
+    };
+  },
+
+  /* ---------- 导出：打包 + 触发下载 ---------- */
+  async exportAll(){
+    let pack;
+    try{ pack = await this.pack(); }
+    catch(e){ toast('导出失败：' + ((e && e.message) || '未知错误')); return; }
+
+    const txt  = JSON.stringify(pack);
+    const blob = new Blob([txt], { type: 'application/json;charset=utf-8' });
+
+    /* 文件名带上时间，方便区分多次备份 */
+    const t = new Date();
+    const p2 = n => String(n).padStart(2,'0');
+    const stamp = `${t.getFullYear()}${p2(t.getMonth()+1)}${p2(t.getDate())}-${p2(t.getHours())}${p2(t.getMinutes())}${p2(t.getSeconds())}`;
+    const name = `祈愿备份-${stamp}${DATA_EXT}`;
+
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} }, 4000);
+    }catch(e){ toast('下载被浏览器拦截，请改用「复制到剪贴板」'); return; }
+
+    const kb = (blob.size/1024).toFixed(1);
+    toast(pack.hasAssets ? `已导出 ${kb} KB（含壁纸 / 皮肤图片）` : `已导出 ${kb} KB`);
+  },
+
+  /* ---------- 复制到剪贴板（下载被拦时的后路） ---------- */
+  async copyAll(){
+    let pack;
+    try{ pack = await this.pack(); }
+    catch(e){ toast('打包失败：' + ((e && e.message) || '未知错误')); return; }
+    const txt = JSON.stringify(pack, null, 2);
+    const text = txt.length > 8*1024*1024 ? JSON.stringify(pack) : txt;  /* 太大就不美化了 */
+    try{
+      await navigator.clipboard.writeText(text);
+      toast('备份内容已复制到剪贴板（' + (text.length/1024).toFixed(1) + ' KB）');
+    }catch(e){
+      /* 剪贴板 API 也可能被拒，退到选中文本让用户自己 Ctrl+C */
+      const ta = document.getElementById('dpPaste');
+      if(ta){ ta.value = text; ta.select(); document.execCommand && document.execCommand('copy'); toast('已填入下方文本框并尝试复制，请按 Ctrl+C 手动复制'); }
+      else toast('复制失败，请改用「粘贴文本导入」区域');
+    }
+  },
+
+  /* ---------- 校验：确认是一个合法的祈愿备份 ---------- */
+  validate(obj){
+    if(!obj || typeof obj !== 'object') return { ok:false, msg:'内容不是有效的备份数据' };
+    if(obj.app !== 'wish-simulator'){
+      if(!obj.data || typeof obj.data !== 'object') return { ok:false, msg:'这不是「祈愿」的备份文件' };
+    }
+    const d = obj.data || (obj.items ? obj : null);
+    if(!d || typeof d !== 'object') return { ok:false, msg:'备份里没有找到数据主体' };
+    if(Number(obj.ver || 1) > DATA_VER) return { ok:false, msg:'这个备份来自更新的版本，请先更新本应用' };
+    return { ok:true, msg:'' };
+  },
+
+  /* ---------- 读文件 ---------- */
+  pickImport(){
+    const inp = document.getElementById('dpFile');
+    if(!inp) return;
+    inp.value = '';
+    inp.click();
+  },
+  async readFile(file){
+    if(!file) return;
+    let txt = '';
+    try{ txt = await file.text(); }
+    catch(e){ toast('读取文件失败'); return; }
+    this.accept(txt);
+  },
+  async readPaste(){
+    const ta = document.getElementById('dpPaste');
+    const txt = (ta && ta.value || '').trim();
+    if(!txt){ toast('请先把备份内容粘贴到文本框里'); return; }
+    this.accept(txt);
+  },
+
+  /* ---------- 解析 + 交给用户选覆盖/合并 ---------- */
+  accept(txt){
+    let obj = null;
+    try{ obj = JSON.parse(txt); }
+    catch(e){ toast('这段内容不是有效的备份数据（JSON 解析失败）'); return; }
+    const v = this.validate(obj);
+    if(!v.ok){ toast(v.msg); return; }
+    this.pending = obj;
+    /* 确认卡片长在「数据」页签里。若当前没打开该页签（比如从别处粘贴导入），
+       先把面板切过去，否则无处可渲染。 */
+    if(!document.getElementById('dpConfirm')){
+      mTab = 'data';
+      openManager('data');
+    }
+    this.renderConfirm(obj);
+    const card = document.getElementById('dpConfirm');
+    if(card){
+      card.style.display = 'block';
+      setTimeout(()=>{ try{ card.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(e){} }, 80);
+    }
+  },
+  pending: null,
+
+  /* ---------- 导入前的确认卡片 ---------- */
+  renderConfirm(obj){
+    const d = obj.data || obj;
+    const n = Array.isArray(d.items) ? d.items.length : 0;
+    const hist = Array.isArray(d.history) ? d.history.length : 0;
+    const owned = d.owned && typeof d.owned === 'object' ? Object.keys(d.owned).length : 0;
+    const st = d.stats || {};
+    const aset = obj.assets || {};
+    const when = obj.at ? new Date(obj.at).toLocaleString('zh-CN') : '（未记录）';
+
+    const assetLine = [
+      aset.wall    ? '背景壁纸' : '',
+      aset.btnSkin ? '按钮皮肤' : '',
+    ].filter(Boolean).join(' + ') || '（不含图片）';
+
+    const card = document.getElementById('dpConfirm');
+    if(!card) return;
+    card.style.display = 'block';
+    card.innerHTML = `
+      <div class="tline" style="margin-top:0">待导入的备份</div>
+      <div class="dpsum">
+        <div><span>导出时间</span><b>${esc(when)}</b></div>
+        <div><span>卡池对象</span><b>${n} 个</b></div>
+        <div><span>抽卡记录</span><b>${hist} 条</b></div>
+        <div><span>已有藏品</span><b>${owned} 种</b></div>
+        <div><span>累计抽数</span><b>${st.total||0} 抽</b></div>
+        <div><span>附带图片</span><b>${esc(assetLine)}</b></div>
+      </div>
+      <div class="hint" style="margin-top:10px">
+        <b>覆盖</b>：清空当前全部数据，完全变成本次导入的内容。<br>
+        <b>合并</b>：保留当前对象，只把备份里<b>没见过</b>的对象追加进来；卡池文案、概率、保底、记录、统计仍以备份为准。
+      </div>
+      <div class="field" style="margin-top:12px">
+        <button class="mini danger" id="dpDoReplace">覆盖导入</button>
+        <button class="mini" id="dpDoMerge">合并导入</button>
+        <button class="mini ghost" id="dpCancel">取消</button>
+      </div>`;
+
+    const g = id => document.getElementById(id);
+    if(g('dpDoReplace')) g('dpDoReplace').onclick = ()=>this.apply(obj, 'replace');
+    if(g('dpDoMerge'))   g('dpDoMerge').onclick   = ()=>this.apply(obj, 'merge');
+    if(g('dpCancel'))    g('dpCancel').onclick    = ()=>{ this.pending = null; card.style.display='none'; };
+  },
+
+  /* ---------- 真正落地 ---------- */
+  async apply(obj, mode){
+    const d = Object.assign({}, obj.data || obj);
+    const assets = obj.assets || {};
+
+    /* —— 对象：合并模式下按「同名 + 同稀有度」去重，其余追加 —— */
+    const incoming = Array.isArray(d.items) ? d.items : [];
+    let added = 0;
+    if(mode === 'merge'){
+      const seen = new Set(state.items.map(i=>`${i.rarity}|${String(i.name||'').trim()}`));
+      incoming.forEach(it=>{
+        if(!it || typeof it !== 'object') return;
+        const key = `${Number(it.rarity)||3}|${String(it.name||'').trim()}`;
+        if(seen.has(key)) return;
+        seen.add(key);
+        state.items.push({
+          id: uid(),
+          name: String(it.name||'未命名').slice(0,40),
+          rarity: [3,4,5].includes(Number(it.rarity)) ? Number(it.rarity) : 3,
+          tag: String(it.tag||'').slice(0,20),
+          up: !!it.up,
+          weight: isFinite(Number(it.weight)) ? Math.max(0, Number(it.weight)) : 1,
+        });
+        added++;
+      });
+    } else {
+      state.items = incoming.map(it=>({
+        id: uid(),
+        name: String((it&&it.name)||'未命名').slice(0,40),
+        rarity: [3,4,5].includes(Number(it&&it.rarity)) ? Number(it.rarity) : 3,
+        tag: String((it&&it.tag)||'').slice(0,20),
+        up: !!(it&&it.up),
+        weight: isFinite(Number(it&&it.weight)) ? Math.max(0, Number(it&&it.weight)) : 1,
+      }));
+    }
+
+    /* —— 其余字段：卡池文案、概率、保底、记录、统计一律以备份为准 —— */
+    if(d.meta)    state.meta    = Object.assign({char:{name:'',sub:''},std:{name:'',sub:''}}, d.meta);
+    if(d.rates)   state.rates   = Object.assign({}, RATES_DEFAULT, d.rates);
+    if(d.owned)   state.owned   = (typeof d.owned === 'object' && d.owned) || {};
+    if(d.history) state.history = Array.isArray(d.history) ? d.history : [];
+    if(d.stats)   state.stats   = Object.assign({total:0,r5:0,r4:0,r3:0,sc:0,sd:0}, d.stats);
+    if(d.audio)   state.audio   = Object.assign({on:true,vol:78}, d.audio);
+    if(d.btn)     state.btn     = Object.assign({scale:1}, d.btn);
+    if(d.pity && typeof d.pity === 'object'){
+      BANNERS.forEach(b=>{ if(d.pity[b.id]) state.pity[b.id] = Object.assign({c5:0,c4:0,guar5:false,guar4:false}, d.pity[b.id]); });
+    }
+    if(typeof d.banner === 'string' && BANNERS.some(b=>b.id===d.banner)) state.banner = d.banner;
+
+    /* —— 壁纸图片 —— */
+    if(assets.wall && assets.wall.b64){
+      const blob = this.b64ToBlob(assets.wall.b64, assets.wall.type);
+      if(blob){
+        const kind = assets.wall.kind === 'video' ? 'video' : 'image';
+        state.wall = Object.assign({}, WALL_DEFAULT, d.wall || {}, { src:'custom', kind });
+        await WALL.put('current', { blob, kind, name: state.wall.name || '', t: Date.now() });
+      }
+    } else if(mode === 'replace' && d.wall && d.wall.src !== 'custom'){
+      /* 覆盖模式下备份明确是默认背景 → 把现有的自定义背景也清掉 */
+      await WALL.del('current');
+      state.wall = Object.assign({}, WALL_DEFAULT, d.wall || {});
+    }
+
+    /* —— 按钮皮肤图片 —— */
+    if(assets.btnSkin && assets.btnSkin.b64){
+      const blob = this.b64ToBlob(assets.btnSkin.b64, assets.btnSkin.type);
+      if(blob){ await WALL.put('btnskin', { blob, name: (state.btn.skin||{}).name || '自定义皮肤', t: Date.now() }); }
+    } else if(mode === 'replace' && (!state.btn.skin || !state.btn.skin.on)){
+      await WALL.del('btnskin');
+    }
+
+    /* —— 收尾：走一遍 load() 的补全逻辑，避免半残字段 —— */
+    this.pending = null;
+    const card = document.getElementById('dpConfirm');
+    if(card){ card.style.display = 'none'; }
+
+    save();
+    load();                       /* 用既有校验/夹取逻辑把字段补全洗净 */
+    save();
+
+    await WALL.boot();
+    await BSKIN.boot();
+    applyBtnScale();
+    renderBanner();
+
+    const n = state.items.length;
+    toast(mode === 'merge'
+      ? `合并完成：新增 ${added} 个对象，当前共 ${n} 个`
+      : `覆盖完成：当前共 ${n} 个对象`);
+
+    paintManager();
+  },
+
+  /* ---------- 重置为初始状态 ---------- */
+  async wipe(){
+    state.items = [];
+    state.owned = {};
+    state.history = [];
+    state.stats = {total:0, r5:0, r4:0, r3:0, sc:0, sd:0};
+    state.meta = {char:{name:'「星轨之约」',sub:'活动祈愿。被标记为 UP 的对象将获得概率提升。'},
+                  std:{name:'「万象常驻」',sub:'常驻祈愿。卡池内全部对象均可能获得。'}};
+    state.rates = Object.assign({}, RATES_DEFAULT);
+    state.banner = 'char';
+    state.wall  = Object.assign({}, WALL_DEFAULT);
+    state.audio = {on:true, vol:78};
+    state.btn   = { scale:1, skin:{ on:false, fit:'cover', ratio:false, dim:14, radius:0, text:false, chibi:false, name:'', sv:2 } };
+    BANNERS.forEach(b=>{ state.pity[b.id] = {c5:0, c4:0, guar5:false, guar4:false}; });
+
+    await WALL.del('current');
+    await WALL.del('btnskin');
+
+    save();
+    await WALL.boot();
+    await BSKIN.boot();
+    applyBtnScale();
+    renderBanner();
+    toast('已重置为初始状态');
+    paintManager();
+  },
+};
+
+/* =========================================================
    6. 抽卡演出（对齐祈愿动画：蓄势 → 白光 → 云涡 → 流星 → 光柱 → 揭示）
    ========================================================= */
 const FX = {
@@ -2898,6 +3258,7 @@ function openManager(tab){
     {k:'wall', n:'背景壁纸'},
     {k:'btn', n:'按钮'},
     {k:'audio', n:'音效'},
+    {k:'data', n:'数据'},
   ]);
   document.querySelectorAll('#mTabs div').forEach(d=>d.onclick=()=>{ mTab=d.dataset.tab; paintManager(); });
   paintManager();
@@ -2911,6 +3272,7 @@ function paintManager(){
   else if(mTab==='wall') body.innerHTML = mgrWallHTML();
   else if(mTab==='btn') body.innerHTML = mgrBtnHTML();
   else if(mTab==='audio') body.innerHTML = mgrAudioHTML();
+  else if(mTab==='data') body.innerHTML = mgrDataHTML();
   else body.innerHTML = mgrPoolHTML();
   if(mTab==='rate') updateSim();
   if(mTab==='wall') WALL.mountPanel(); else WALL.camStop();
@@ -3237,6 +3599,64 @@ function mgrAudioHTML(){
     <div class="hint" style="margin-top:14px">音效顺序对应动画：低频蓄势 → 白光冲刷 → 云涡流转 → 流星破空 → 光柱爆发 → 揭示重击 → 余韵。</div>`;
 }
 
+function mgrDataHTML(){
+  const n = state.items.length;
+  const hist = state.history.length;
+  const owned = Object.keys(state.owned || {}).length;
+  const st = state.stats || {};
+  const hasWall = state.wall && state.wall.src === 'custom';
+  const hasSkin = !!(state.btn.skin && state.btn.skin.on);
+
+  const assetChips = [
+    hasWall ? `<span class="dpchip on">背景壁纸</span>` : `<span class="dpchip">无背景壁纸</span>`,
+    hasSkin ? `<span class="dpchip on">按钮皮肤</span>` : `<span class="dpchip">无按钮皮肤</span>`,
+  ].join('');
+
+  return `
+    <div class="hint">
+      把当前的全部数据打包成一个 <code>${DATA_EXT}</code> 文件，方便备份、换电脑、或分享给朋友。<br>
+      <b>包含</b>：卡池对象、概率设置、卡池文案、保底进度、抽卡记录、统计、背景壁纸图片、按钮皮肤图片。<br>
+      文件内含图片时会大一些（几 MB 到几十 MB 视图片大小而定）；不含图片时通常只有几十 KB。
+    </div>
+
+    <div class="tline" style="margin-top:16px">当前数据概览</div>
+    <div class="dpsum">
+      <div><span>卡池对象</span><b>${n} 个</b></div>
+      <div><span>抽卡记录</span><b>${hist} 条</b></div>
+      <div><span>已有藏品</span><b>${owned} 种</b></div>
+      <div><span>累计抽数</span><b>${st.total||0} 抽</b></div>
+      <div><span>五星 / 四星</span><b>${st.r5||0} / ${st.r4||0}</b></div>
+      <div><span>附带图片</span><b>${assetChips}</b></div>
+    </div>
+
+    <div class="tline">导出</div>
+    <div class="field">
+      <button class="mini" id="dpExport">导出全部数据</button>
+      <button class="mini ghost" id="dpCopy">复制到剪贴板</button>
+    </div>
+    <div class="hint" style="margin-top:8px">下载会被存到浏览器的「下载」文件夹。<br>
+      如果下载被拦截（某些浏览器在本地文件下会拦），可用「复制到剪贴板」再自行粘贴保存。</div>
+
+    <div class="tline">导入</div>
+    <div class="field">
+      <button class="mini" id="dpImport">选择备份文件…</button>
+      <button class="mini ghost" id="dpPasteRead">从下方文本导入</button>
+    </div>
+    <input type="file" id="dpFile" accept="${DATA_EXT},.json,.txt,application/json" style="display:none">
+    <textarea id="dpPaste" placeholder="把备份文件的全部内容粘贴到这里，再点上方「从下方文本导入」" style="min-height:92px;margin-top:10px"></textarea>
+
+    <div id="dpConfirm" style="display:none"></div>
+
+    <div class="tline">重置</div>
+    <div class="field">
+      <button class="mini danger" id="dpWipe">重置全部数据</button>
+    </div>
+    <div class="hint" style="margin-top:8px">
+      会清空对象、记录、统计、壁纸与按钮皮肤，回到刚装好的状态。
+      <b>这一步不可撤销</b>，建议先导出一份备份。
+    </div>`;
+}
+
 function mgrBtnHTML(){
   const pct = Math.round(state.btn.scale * 100);
   const s = state.btn.skin;
@@ -3322,6 +3742,15 @@ function bindManager(){
       BANNERS.forEach(b=>{ state.pity[b.id]={c5:0,c4:0,guar5:false,guar4:false}; });
       save(); renderBanner(); toast('保底计数已重置'); return;
     }
+    /* —— 数据导入 / 导出 —— */
+    if(t.id==='dpExport'){ SFX.click(); DataPort.exportAll(); return; }
+    if(t.id==='dpCopy'){ SFX.click(); DataPort.copyAll(); return; }
+    if(t.id==='dpImport'){ SFX.click(); DataPort.pickImport(); return; }
+    if(t.id==='dpPasteRead'){ SFX.click(); DataPort.readPaste(); return; }
+    if(t.id==='dpWipe'){
+      if(!confirm('确定重置全部数据？\n\n将清空对象、记录、统计、壁纸与按钮皮肤，且无法撤销。\n建议先导出一份备份。')) return;
+      SFX.click(); DataPort.wipe(); return;
+    }
     if(t.id==='rateReset'){
       state.rates = Object.assign({}, RATES_DEFAULT);
       save(); paintManager(); toast('已恢复默认概率'); return;
@@ -3401,6 +3830,12 @@ function bindManager(){
     if(el.id === 'skinFile' || el.id === 'skinCam'){
       const f = el.files && el.files[0];
       if(f) BSKIN.useFile(f);
+      el.value = '';
+      return;
+    }
+    if(el.id === 'dpFile'){
+      const f = el.files && el.files[0];
+      if(f) DataPort.readFile(f);
       el.value = '';
       return;
     }

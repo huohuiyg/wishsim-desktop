@@ -1,7 +1,7 @@
 {
   "name": "wishsim-desktop",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "祈愿 · Wish Simulator 桌面端（Tauri v2 外壳）",
   "scripts": {
